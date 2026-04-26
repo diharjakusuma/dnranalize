@@ -29,7 +29,15 @@ logger = logging.getLogger(__name__)
 HOST = "localhost"
 PORT = 8765
 
-PAIRS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD", "USDCHF"]
+PAIRS = [
+    "EURUSD","GBPUSD","USDJPY","AUDUSD","USDCHF","USDCAD","NZDUSD",
+    "EURGBP","EURJPY","EURCAD","EURAUD","EURNZD","EURCHF",
+    "GBPJPY","GBPAUD","GBPCAD","GBPCHF","GBPNZD",
+    "AUDJPY","AUDCAD","AUDCHF","AUDNZD","CADJPY","CHFJPY","NZDJPY",
+    "XAUUSD","XAGUSD","USOIL","UKOIL",
+    "USTEC","US30","US500",
+    "BTCUSD","ETHUSD",
+]
 
 TIMEFRAME_MAP = {
     "M1":  mt5.TIMEFRAME_M1,
@@ -265,13 +273,28 @@ async def handle_client(websocket):
                         req.get("sl", 0), req.get("tp", 0)
                     )
                     await websocket.send(json.dumps({
-                        "type": "order_result", **result
+                        "type": "order_result",
+                        "symbol": req.get("symbol"),
+                        "action": req.get("action"),
+                        "reqId": req.get("reqId",""),
+                        **result
                     }))
 
                 elif msg_type == "close_position":
                     result = close_position(req["ticket"])
                     await websocket.send(json.dumps({
-                        "type": "close_result", **result
+                        "type": "close_result",
+                        "ticket": req.get("ticket"),
+                        **result
+                    }))
+
+                elif msg_type == "get_positions":
+                    positions = get_open_positions()
+                    account = get_account_info()
+                    await websocket.send(json.dumps({
+                        "type": "account",
+                        "positions": positions,
+                        "account": account,
                     }))
 
                 elif msg_type == "ping":
