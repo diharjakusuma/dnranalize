@@ -224,30 +224,135 @@ function SignalBadge({ signal, confidence }) {
   );
 }
 
-function OrderPanel({ symbol, tick, onOrder }) {
+function OrderPanel({ symbol, tick, onOrder, connected, demoMode }) {
   const [vol, setVol] = useState("0.01");
-  const [sl, setSl] = useState("");
-  const [tp, setTp] = useState("");
-  const btnStyle = (type) => ({
-    flex:1, padding:"10px 0", border:"none", borderRadius:6, fontFamily:"monospace",
-    fontWeight:700, fontSize:13, cursor:"pointer", letterSpacing:1,
-    ...(type==="BUY" ? {background:"#16a34a",color:"#fff"} : {background:"#dc2626",color:"#fff"}),
+  const [slPips, setSlPips] = useState("");
+  const [tpPips, setTpPips] = useState("");
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  const d = DIGITS[symbol] || 5;
+  const pip = {XAUUSD:0.1,XAGUSD:0.01,USOIL:0.01,UKOIL:0.01,USTEC:1,US30:1,US500:0.1,BTCUSD:1,ETHUSD:0.1}[symbol]||0.0001;
+  const sl = parseFloat(slPips) || 0;
+  const tp = parseFloat(tpPips) || 0;
+
+  // Calculate actual SL/TP prices
+  const slBuy  = sl && tick ? +(tick.ask - sl * pip).toFixed(d) : null;
+  const slSell = sl && tick ? +(tick.bid + sl * pip).toFixed(d) : null;
+  const tpBuy  = tp && tick ? +(tick.ask + tp * pip).toFixed(d) : null;
+  const tpSell = tp && tick ? +(tick.bid - tp * pip).toFixed(d) : null;
+  const rr = sl && tp ? (tp/sl).toFixed(1) : null;
+
+  const go = (action) => {
+    if (!connected || demoMode) {
+      setResult({ok:false, msg:"⚠ Hubungkan ke MT5 untuk order nyata"});
+      setTimeout(()=>setResult(null), 4000);
+      return;
+    }
+    const slPrice = action==="BUY" ? (slBuy||0) : (slSell||0);
+    const tpPrice = action==="BUY" ? (tpBuy||0) : (tpSell||0);
+    setLoading(true);
+    onOrder(symbol, action, vol, slPrice, tpPrice, (res)=>{
+      setLoading(false);
+      setResult(res);
+      setTimeout(()=>setResult(null), 5000);
+    });
+  };
+
+  const inpStyle = (color) => ({
+    width:"100%", background:"#070e1d", border:`1px solid ${color}33`,
+    borderRadius:4, padding:"6px 8px", color:"#e2e8f0",
+    fontFamily:"monospace", fontSize:12, boxSizing:"border-box", outline:"none",
   });
+
   return (
-    <div style={{background:"#0f172a",border:"1px solid #1e293b",borderRadius:8,padding:14,marginTop:12}}>
-      <div style={{color:"#64748b",fontSize:11,fontFamily:"monospace",marginBottom:8,letterSpacing:1}}>QUICK ORDER — {symbol}</div>
-      <div style={{display:"flex",gap:8,marginBottom:8}}>
-        {[["Vol",vol,setVol],["SL (pips)",sl,setSl],["TP (pips)",tp,setTp]].map(([label,val,setter])=>(
-          <div key={label} style={{flex:1}}>
-            <div style={{color:"#475569",fontSize:10,fontFamily:"monospace",marginBottom:3}}>{label}</div>
-            <input value={val} onChange={e=>setter(e.target.value)} style={{width:"100%",background:"#1e293b",border:"1px solid #334155",borderRadius:4,padding:"6px 8px",color:"#e2e8f0",fontFamily:"monospace",fontSize:12,boxSizing:"border-box"}}/>
+    <div style={{background:"#0a1628",border:"1px solid #1e293b",borderRadius:8,padding:14,marginTop:12}}>
+      {/* Header */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+        <span style={{color:"#64748b",fontSize:10,fontFamily:"monospace",letterSpacing:2}}>QUICK ORDER — {symbol}</span>
+        {!connected && <span style={{color:"#f97316",fontSize:9,fontFamily:"monospace"}}>⚠ DEMO ONLY</span>}
+        {connected && <span style={{color:"#4ade80",fontSize:9,fontFamily:"monospace"}}>● LIVE</span>}
+      </div>
+
+      {/* BID / ASK display */}
+      {tick && (
+        <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:0,marginBottom:10,border:"1px solid #1e293b",borderRadius:6,overflow:"hidden"}}>
+          <div style={{padding:"6px 10px",background:"#1a0a0a",textAlign:"center"}}>
+            <div style={{color:"#64748b",fontSize:8,letterSpacing:1}}>BID</div>
+            <div style={{color:"#f87171",fontSize:15,fontWeight:700,fontFamily:"monospace"}}>{tick.bid?.toFixed(d)}</div>
           </div>
-        ))}
+          <div style={{padding:"6px 8px",background:"#0f172a",textAlign:"center",borderLeft:"1px solid #1e293b",borderRight:"1px solid #1e293b"}}>
+            <div style={{color:"#64748b",fontSize:8}}>SPR</div>
+            <div style={{color:"#475569",fontSize:11,fontFamily:"monospace"}}>{tick.spread}</div>
+          </div>
+          <div style={{padding:"6px 10px",background:"#0a1a0a",textAlign:"center"}}>
+            <div style={{color:"#64748b",fontSize:8,letterSpacing:1}}>ASK</div>
+            <div style={{color:"#4ade80",fontSize:15,fontWeight:700,fontFamily:"monospace"}}>{tick.ask?.toFixed(d)}</div>
+          </div>
+        </div>
+      )}
+
+      {/* Inputs */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+        <div>
+          <div style={{color:"#94a3b8",fontSize:9,fontFamily:"monospace",marginBottom:3,letterSpacing:1}}>LOT SIZE</div>
+          <input value={vol} onChange={e=>setVol(e.target.value)} style={inpStyle("#94a3b8")}/>
+          <div style={{color:"#475569",fontSize:8,marginTop:2}}>min 0.01</div>
+        </div>
+        <div>
+          <div style={{color:"#f87171",fontSize:9,fontFamily:"monospace",marginBottom:3,letterSpacing:1}}>STOP LOSS</div>
+          <input value={slPips} onChange={e=>setSlPips(e.target.value)} placeholder="pips" style={inpStyle("#f87171")}/>
+          {sl > 0 && tick && (
+            <div style={{color:"#f8717199",fontSize:8,marginTop:2,lineHeight:1.4}}>
+              ▲{slBuy} / ▼{slSell}
+            </div>
+          )}
+        </div>
+        <div>
+          <div style={{color:"#a78bfa",fontSize:9,fontFamily:"monospace",marginBottom:3,letterSpacing:1}}>TAKE PROFIT</div>
+          <input value={tpPips} onChange={e=>setTpPips(e.target.value)} placeholder="pips" style={inpStyle("#a78bfa")}/>
+          {tp > 0 && tick && (
+            <div style={{color:"#a78bfa99",fontSize:8,marginTop:2,lineHeight:1.4}}>
+              ▲{tpBuy} / ▼{tpSell}
+            </div>
+          )}
+        </div>
       </div>
-      <div style={{display:"flex",gap:8}}>
-        <button style={btnStyle("BUY")} onClick={()=>onOrder(symbol,"BUY",vol,sl,tp)}>▲ BUY {tick?.ask}</button>
-        <button style={btnStyle("SELL")} onClick={()=>onOrder(symbol,"SELL",vol,sl,tp)}>▼ SELL {tick?.bid}</button>
+
+      {/* R:R ratio */}
+      {rr && (
+        <div style={{color:"#64748b",fontSize:9,fontFamily:"monospace",marginBottom:8}}>
+          Risk:Reward = <span style={{color:"#22d3ee",fontWeight:700}}>1 : {rr}</span>
+        </div>
+      )}
+
+      {/* BUY / SELL buttons */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+        <button
+          onClick={()=>go("BUY")}
+          disabled={loading}
+          style={{padding:"10px 0",background:loading?"#0f2e1a":"linear-gradient(135deg,#16a34a,#15803d)",border:"1px solid #16a34a55",borderRadius:6,color:"#fff",fontFamily:"monospace",fontSize:13,fontWeight:700,cursor:loading?"not-allowed":"pointer",letterSpacing:1,transition:"all .15s"}}>
+          {loading?"⟳ ...":"▲ BUY"}<br/>
+          <span style={{fontSize:10,opacity:.8}}>{tick?.ask?.toFixed(d)}</span>
+        </button>
+        <button
+          onClick={()=>go("SELL")}
+          disabled={loading}
+          style={{padding:"10px 0",background:loading?"#2e0f0f":"linear-gradient(135deg,#dc2626,#b91c1c)",border:"1px solid #dc262655",borderRadius:6,color:"#fff",fontFamily:"monospace",fontSize:13,fontWeight:700,cursor:loading?"not-allowed":"pointer",letterSpacing:1,transition:"all .15s"}}>
+          {loading?"⟳ ...":"▼ SELL"}<br/>
+          <span style={{fontSize:10,opacity:.8}}>{tick?.bid?.toFixed(d)}</span>
+        </button>
       </div>
+
+      {/* Result notification */}
+      {result && (
+        <div style={{marginTop:8,padding:"6px 10px",borderRadius:4,fontSize:10,fontFamily:"monospace",
+          background:result.ok?"#052e16":"#2d0b0b",
+          border:`1px solid ${result.ok?"#16a34a44":"#dc262644"}`,
+          color:result.ok?"#4ade80":"#f87171"}}>
+          {result.msg}
+        </div>
+      )}
     </div>
   );
 }
@@ -301,6 +406,12 @@ function PairCard({ symbol, tick, candles, analysis, selected, analyzing, onSele
             {analyzing?"◌ AI...":"⚡ AI"}
           </button>
         </div>
+      </div>
+
+      {/* FOOTER */}
+      <div style={{background:"#070e1d",borderTop:"1px solid #0f172a",padding:"5px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{color:"#2a2d38",fontSize:9,letterSpacing:2,fontFamily:"monospace"}}>DnR TERMINAL © 2026 — MT5 Web Dashboard</span>
+        <span style={{color:"#2a2d38",fontSize:9,fontFamily:"monospace",letterSpacing:1}}>{new Date().toLocaleTimeString("id-ID")}</span>
       </div>
     </div>
   );
@@ -418,10 +529,36 @@ export default function App() {
     ws.onmessage = (e) => {
       try {
         const msg = JSON.parse(e.data);
-        if (msg.type === "ticks") setTicks(prev => ({...prev, ...msg.data}));
-        else if (msg.type === "candles") setCandles(prev => ({...prev, [msg.symbol]: msg.data}));
-        else if (msg.type === "account") { setPositions(msg.positions || []); setAccount(msg.account); }
-        else if (msg.type === "init") { setPositions(msg.positions || []); setAccount(msg.account); }
+        if (msg.type === "ticks") {
+          setTicks(prev => ({...prev, ...msg.data}));
+        } else if (msg.type === "candles") {
+          setCandles(prev => ({...prev, [msg.symbol]: msg.data}));
+        } else if (msg.type === "account" || msg.type === "init") {
+          setPositions(msg.positions || []);
+          setAccount(msg.account);
+        } else if (msg.type === "order_result") {
+          // trigger callback if exists
+          if (msg.reqId && orderCallbacks.current[msg.reqId]) {
+            const cb = orderCallbacks.current[msg.reqId];
+            delete orderCallbacks.current[msg.reqId];
+            if (msg.success) {
+              cb({ok:true, msg:`✓ ${msg.action||"Order"} berhasil! Ticket #${msg.ticket} @ ${msg.price}`});
+            } else {
+              cb({ok:false, msg:`✗ Order gagal: ${msg.error}`});
+            }
+          }
+          // refresh positions after order
+          if (msg.success) {
+            setTimeout(()=>{
+              if(wsRef.current?.readyState===1)
+                wsRef.current.send(JSON.stringify({type:"get_positions"}));
+            }, 500);
+          }
+        } else if (msg.type === "close_result") {
+          if (msg.success) {
+            setPositions(prev => prev.filter(p => p.ticket !== msg.ticket));
+          }
+        }
       } catch {}
     };
     ws.onerror = () => setWsStatus("error");
@@ -445,17 +582,28 @@ export default function App() {
     for (const p of PAIRS) await handleAnalyze(p);
   };
 
-  const handleOrder = (symbol, action, volume, sl, tp) => {
+  // Map of pending order callbacks
+  const orderCallbacks = useRef({});
+
+  const handleOrder = (symbol, action, volume, sl, tp, callback) => {
     if (!demoMode && wsRef.current?.readyState === 1) {
-      wsRef.current.send(JSON.stringify({type:"send_order",symbol,action,volume:parseFloat(volume),sl:parseFloat(sl)||0,tp:parseFloat(tp)||0}));
+      const reqId = Date.now().toString();
+      if (callback) orderCallbacks.current[reqId] = callback;
+      wsRef.current.send(JSON.stringify({
+        type:"send_order", symbol, action,
+        volume:parseFloat(volume),
+        sl:parseFloat(sl)||0,
+        tp:parseFloat(tp)||0,
+        reqId,
+      }));
     } else {
-      alert(`[DEMO] ${action} ${volume} lot ${symbol} — Hubungkan ke MT5 untuk order nyata.`);
+      if (callback) callback({ok:false, msg:"⚠ Demo mode — hubungkan ke MT5 untuk order nyata"});
     }
   };
 
   const handleClose = (ticket) => {
     if (!demoMode && wsRef.current?.readyState === 1) {
-      wsRef.current.send(JSON.stringify({type:"close_position",ticket}));
+      wsRef.current.send(JSON.stringify({type:"close_position", ticket}));
     } else {
       setPositions(p=>p.filter(pos=>pos.ticket!==ticket));
     }
@@ -469,7 +617,15 @@ export default function App() {
       {/* TOP BAR */}
       <div style={{background:"#070e1d",borderBottom:"1px solid #0f172a",padding:"10px 20px",display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
-          <span style={{color:"#06b6d4",fontSize:18,fontWeight:700,letterSpacing:2}}>⬡ FX TERMINAL</span>
+          <div style={{display:"flex",alignItems:"center",gap:8}}>
+            <div style={{width:24,height:24,background:"linear-gradient(135deg,#b8935a,#d4a96a)",borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center"}}>
+              <span style={{color:"#000",fontSize:11,fontWeight:900}}>D</span>
+            </div>
+            <div>
+              <div style={{color:"#b8935a",fontSize:13,fontWeight:700,letterSpacing:3,lineHeight:1}}>DnR TERMINAL</div>
+              <div style={{color:"#4a5060",fontSize:7,letterSpacing:3}}>MT5 WEB DASHBOARD</div>
+            </div>
+          </div>
           <span style={{color:"#1e3a5f",fontSize:12}}>|</span>
           <span style={{color:demoMode?"#fb923c":"#4ade80",fontSize:11,letterSpacing:1}}>● {demoMode?"DEMO MODE":"LIVE MT5"}</span>
         </div>
@@ -604,7 +760,7 @@ export default function App() {
                 </div>
               )}
 
-              <OrderPanel symbol={selected} tick={ticks[selected]} onOrder={handleOrder}/>
+              <OrderPanel symbol={selected} tick={ticks[selected]} onOrder={handleOrder} connected={wsStatus==="connected"} demoMode={demoMode}/>
             </>
           )}
 
@@ -615,6 +771,12 @@ export default function App() {
             </div>
           )}
         </div>
+      </div>
+
+      {/* FOOTER */}
+      <div style={{background:"#070e1d",borderTop:"1px solid #0f172a",padding:"5px 20px",display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+        <span style={{color:"#2a2d38",fontSize:9,letterSpacing:2,fontFamily:"monospace"}}>DnR TERMINAL © 2026 — MT5 Web Dashboard</span>
+        <span style={{color:"#2a2d38",fontSize:9,fontFamily:"monospace",letterSpacing:1}}>{new Date().toLocaleTimeString("id-ID")}</span>
       </div>
     </div>
   );
