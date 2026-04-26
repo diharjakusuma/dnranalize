@@ -3,8 +3,8 @@ name: Deploy FX Terminal to GitHub Pages
 on:
   push:
     branches:
-      - main        # Auto deploy setiap push ke branch main
-  workflow_dispatch:  # Bisa juga trigger manual dari GitHub UI
+      - main
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -30,7 +30,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
 
       - name: 📦 Install dependencies
         run: npm install
