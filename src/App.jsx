@@ -4,44 +4,103 @@ import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "rec
 // ─── GROQ API KEY — Ganti dengan key kamu dari console.groq.com ───
 const GROQ_API_KEY = "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";
 
-const PAIRS = ["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCHF"];
-const PAIR_FLAGS = { EURUSD:"🇪🇺🇺🇸", GBPUSD:"🇬🇧🇺🇸", USDJPY:"🇺🇸🇯🇵", AUDUSD:"🇦🇺🇺🇸", USDCHF:"🇺🇸🇨🇭" };
-const PAIR_NAMES = { EURUSD:"Euro / Dollar", GBPUSD:"Pound / Dollar", USDJPY:"Dollar / Yen", AUDUSD:"Aussie / Dollar", USDCHF:"Dollar / Franc" };
+const PAIRS = [
+  "EURUSD","GBPUSD","USDJPY","AUDUSD","USDCHF","USDCAD","NZDUSD",
+  "EURGBP","EURJPY","EURCAD","EURAUD","EURNZD","EURCHF",
+  "GBPJPY","GBPAUD","GBPCAD","GBPCHF","GBPNZD",
+  "AUDJPY","AUDCAD","AUDCHF","AUDNZD","CADJPY","CHFJPY","NZDJPY",
+  "XAUUSD","XAGUSD","USOIL","UKOIL",
+  "USTEC","US30","US500",
+  "BTCUSD","ETHUSD",
+];
+const GROUPS = {
+  FX:     ["EURUSD","GBPUSD","USDJPY","AUDUSD","USDCHF","USDCAD","NZDUSD"],
+  CROSS:  ["EURGBP","EURJPY","EURCAD","EURAUD","EURNZD","EURCHF","GBPJPY","GBPAUD","GBPCAD","GBPCHF","GBPNZD","AUDJPY","AUDCAD","AUDCHF","AUDNZD","CADJPY","CHFJPY","NZDJPY"],
+  METAL:  ["XAUUSD","XAGUSD"],
+  ENERGY: ["USOIL","UKOIL"],
+  INDEX:  ["USTEC","US30","US500"],
+  CRYPTO: ["BTCUSD","ETHUSD"],
+};
+const PAIR_FLAGS = {
+  EURUSD:"EU",GBPUSD:"GB",USDJPY:"JP",AUDUSD:"AU",USDCHF:"CH",USDCAD:"CA",NZDUSD:"NZ",
+  EURGBP:"EG",EURJPY:"EJ",EURCAD:"EC",EURAUD:"EA",EURNZD:"EN",EURCHF:"EF",
+  GBPJPY:"GJ",GBPAUD:"GA",GBPCAD:"GC",GBPCHF:"GF",GBPNZD:"GN",
+  AUDJPY:"AJ",AUDCAD:"AC",AUDCHF:"AF",AUDNZD:"AN",CADJPY:"CJ",CHFJPY:"XJ",NZDJPY:"NJ",
+  XAUUSD:"XAU",XAGUSD:"XAG",USOIL:"OIL",UKOIL:"OIL",
+  USTEC:"NQ",US30:"DJ",US500:"SP",BTCUSD:"BTC",ETHUSD:"ETH",
+};
+const PAIR_NAMES = {
+  EURUSD:"Euro / Dollar",GBPUSD:"Pound / Dollar",USDJPY:"Dollar / Yen",AUDUSD:"Aussie / Dollar",
+  USDCHF:"Dollar / Franc",USDCAD:"Dollar / CAD",NZDUSD:"Kiwi / Dollar",
+  EURGBP:"Euro / Pound",EURJPY:"Euro / Yen",EURCAD:"Euro / CAD",EURAUD:"Euro / Aussie",
+  EURNZD:"Euro / Kiwi",EURCHF:"Euro / Franc",GBPJPY:"Pound / Yen",GBPAUD:"Pound / Aussie",
+  GBPCAD:"Pound / CAD",GBPCHF:"Pound / Franc",GBPNZD:"Pound / Kiwi",
+  AUDJPY:"Aussie / Yen",AUDCAD:"Aussie / CAD",AUDCHF:"Aussie / Franc",AUDNZD:"Aussie / Kiwi",
+  CADJPY:"CAD / Yen",CHFJPY:"Franc / Yen",NZDJPY:"Kiwi / Yen",
+  XAUUSD:"Gold / Dollar",XAGUSD:"Silver / Dollar",USOIL:"US Oil (WTI)",UKOIL:"UK Oil (Brent)",
+  USTEC:"NASDAQ 100",US30:"Dow Jones 30",US500:"S&P 500",BTCUSD:"Bitcoin / Dollar",ETHUSD:"Ethereum / Dollar",
+};
 const TIMEFRAMES = ["M1","M5","M15","H1","H4","D1"];
-const BASE_PRICES = { EURUSD:1.0845, GBPUSD:1.2734, USDJPY:154.21, AUDUSD:0.6412, USDCHF:0.9023 };
-const DIGITS = { EURUSD:5, GBPUSD:5, USDJPY:3, AUDUSD:5, USDCHF:5 };
+const BASE_PRICES = {
+  EURUSD:1.0845,GBPUSD:1.2734,USDJPY:154.21,AUDUSD:0.6412,USDCHF:0.9023,USDCAD:1.3650,NZDUSD:0.5980,
+  EURGBP:0.8512,EURJPY:167.40,EURCAD:1.4801,EURAUD:1.6910,EURNZD:1.8130,EURCHF:0.9740,
+  GBPJPY:196.60,GBPAUD:1.9870,GBPCAD:1.7390,GBPCHF:1.1440,GBPNZD:2.1290,
+  AUDJPY:99.01,AUDCAD:0.8820,AUDCHF:0.5840,AUDNZD:1.0870,CADJPY:112.97,CHFJPY:170.80,NZDJPY:92.10,
+  XAUUSD:2345.50,XAGUSD:28.40,USOIL:78.40,UKOIL:82.10,USTEC:18250.0,US30:39800.0,US500:5280.0,
+  BTCUSD:67500.0,ETHUSD:3450.0,
+};
+const DIGITS = {
+  EURUSD:5,GBPUSD:5,USDJPY:3,AUDUSD:5,USDCHF:5,USDCAD:5,NZDUSD:5,
+  EURGBP:5,EURJPY:3,EURCAD:5,EURAUD:5,EURNZD:5,EURCHF:5,
+  GBPJPY:3,GBPAUD:5,GBPCAD:5,GBPCHF:5,GBPNZD:5,
+  AUDJPY:3,AUDCAD:5,AUDCHF:5,AUDNZD:5,CADJPY:3,CHFJPY:3,NZDJPY:3,
+  XAUUSD:2,XAGUSD:3,USOIL:2,UKOIL:2,USTEC:1,US30:1,US500:1,BTCUSD:2,ETHUSD:2,
+};
+
+const VOL_MAP = {
+  USDJPY:0.12,EURJPY:0.14,GBPJPY:0.18,AUDJPY:0.08,CADJPY:0.1,CHFJPY:0.13,NZDJPY:0.07,
+  XAUUSD:2.0,XAGUSD:0.12,USOIL:0.3,UKOIL:0.32,USTEC:30,US30:70,US500:8,BTCUSD:200,ETHUSD:12,
+};
+const SPR_MAP = {
+  XAUUSD:30,BTCUSD:50,USTEC:15,US30:20,USDJPY:2,EURJPY:2,GBPJPY:3,ETHUSD:5,USOIL:3,UKOIL:3,
+};
+function getVol(s){ return VOL_MAP[s]||0.0007; }
+function getSpr(s){ return SPR_MAP[s]||1.2; }
 
 function generateMockCandles(symbol, count=80) {
-  const base = BASE_PRICES[symbol];
-  const volatility = symbol === "USDJPY" ? 0.15 : 0.0008;
+  const base = BASE_PRICES[symbol]||1;
+  const vol = getVol(symbol);
+  const d = DIGITS[symbol]||5;
   const data = [];
   let price = base;
   const now = Date.now();
   for (let i = count; i >= 0; i--) {
-    const change = (Math.random() - 0.49) * volatility;
+    const change = (Math.random() - 0.49) * vol;
     const open = price;
     price += change;
-    const high = Math.max(open, price) + Math.random() * volatility * 0.5;
-    const low  = Math.min(open, price) - Math.random() * volatility * 0.5;
+    const high = Math.max(open, price) + Math.random() * vol * 0.4;
+    const low  = Math.min(open, price) - Math.random() * vol * 0.4;
     data.push({
       time: new Date(now - i * 5 * 60000).toISOString(),
-      open: +open.toFixed(DIGITS[symbol]),
-      high: +high.toFixed(DIGITS[symbol]),
-      low:  +low.toFixed(DIGITS[symbol]),
-      close: +price.toFixed(DIGITS[symbol]),
-      volume: Math.floor(Math.random() * 2000 + 500),
+      open: +open.toFixed(d),
+      high: +high.toFixed(d),
+      low:  +low.toFixed(d),
+      close: +price.toFixed(d),
+      volume: Math.floor(Math.random() * 2000 + 300),
     });
   }
   return data;
 }
 
 function generateMockTick(symbol, prev) {
-  const base = prev?.bid || BASE_PRICES[symbol];
-  const vol = symbol === "USDJPY" ? 0.03 : 0.00015;
-  const bid = +(base + (Math.random()-0.49)*vol).toFixed(DIGITS[symbol]);
-  const spread = symbol === "USDJPY" ? 0.02 : 0.00012;
-  const ask = +(bid + spread).toFixed(DIGITS[symbol]);
-  return { symbol, bid, ask, spread: symbol==="USDJPY"?2:1.2, time: new Date().toISOString(), digits: DIGITS[symbol] };
+  const base = prev?.bid || BASE_PRICES[symbol]||1;
+  const vol = getVol(symbol)*0.18;
+  const d = DIGITS[symbol]||5;
+  const pip = {XAUUSD:0.1,XAGUSD:0.01,USOIL:0.01,UKOIL:0.01,USTEC:1,US30:1,US500:0.1,BTCUSD:1,ETHUSD:0.1}[symbol]||0.0001;
+  const bid = +(base + (Math.random()-0.49)*vol).toFixed(d);
+  const spr = getSpr(symbol);
+  const ask = +(bid + spr*pip).toFixed(d);
+  return { symbol, bid, ask, spread: spr, time: new Date().toISOString(), digits: d };
 }
 
 async function analyzeWithClaude(symbol, candles, tick) {
@@ -301,6 +360,7 @@ export default function App() {
   const [analyses, setAnalyses] = useState({});
   const [analyzing, setAnalyzing] = useState({});
   const [tab, setTab] = useState("chart");
+  const [group, setGroup] = useState("FX");
 
   const wsRef = useRef(null);
   const demoInterval = useRef(null);
@@ -436,22 +496,37 @@ export default function App() {
       <div style={{display:"grid",gridTemplateColumns:"300px 1fr",gap:0,height:"calc(100vh - 57px)"}}>
 
         {/* LEFT — PAIR LIST */}
-        <div style={{borderRight:"1px solid #0f172a",overflowY:"auto",padding:12,display:"flex",flexDirection:"column",gap:8}}>
-          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
-            <span style={{color:"#475569",fontSize:10,letterSpacing:2}}>FOREX PAIRS</span>
-            <button onClick={analyzeAll} style={{background:"#0f172a",border:"1px solid #1e293b",color:"#06b6d4",padding:"3px 10px",borderRadius:4,cursor:"pointer",fontSize:10,letterSpacing:1}}>⚡ AI ALL</button>
+        <div style={{borderRight:"1px solid #0f172a",overflowY:"auto",display:"flex",flexDirection:"column"}}>
+          {/* Group Tabs */}
+          <div style={{display:"flex",borderBottom:"1px solid #0f172a",flexShrink:0,flexWrap:"wrap"}}>
+            {Object.keys(GROUPS).map(g=>(
+              <button key={g} onClick={()=>setGroup(g)} style={{
+                flex:1,minWidth:40,padding:"5px 2px",background:group===g?"#0f172a":"none",
+                border:"none",borderBottom:`2px solid ${group===g?"#b8935a":"transparent"}`,
+                color:group===g?"#b8935a":"#475569",cursor:"pointer",fontSize:7,letterSpacing:1,
+                fontFamily:"monospace",fontWeight:group===g?700:400,
+              }}>{g}</button>
+            ))}
           </div>
-          {PAIRS.map(p=>(
-            <PairCard
-              key={p} symbol={p}
-              tick={ticks[p]} candles={candles[p]}
-              analysis={analyses[p]}
-              analyzing={analyzing[p]}
-              selected={selected===p}
-              onSelect={setSelected}
-              onAnalyze={handleAnalyze}
-            />
-          ))}
+          {/* Header row */}
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"6px 10px",flexShrink:0}}>
+            <span style={{color:"#475569",fontSize:9,letterSpacing:2}}>{group} PAIRS</span>
+            <button onClick={analyzeAll} style={{background:"#0f172a",border:"1px solid #1e293b",color:"#06b6d4",padding:"2px 8px",borderRadius:4,cursor:"pointer",fontSize:9,letterSpacing:1}}>⚡ AI ALL</button>
+          </div>
+          {/* Pairs */}
+          <div style={{overflowY:"auto",flex:1,padding:"0 8px 8px"}}>
+            {(GROUPS[group]||PAIRS).map(p=>(
+              <PairCard
+                key={p} symbol={p}
+                tick={ticks[p]} candles={candles[p]}
+                analysis={analyses[p]}
+                analyzing={analyzing[p]}
+                selected={selected===p}
+                onSelect={setSelected}
+                onAnalyze={handleAnalyze}
+              />
+            ))}
+          </div>
         </div>
 
         {/* RIGHT — DETAIL */}
