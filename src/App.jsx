@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 // ─── GROQ API KEY — Ganti dengan key kamu dari console.groq.com ───
-const GROQ_API_KEY = "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";
+const GROQ_API_KEY = "GANTI_DENGAN_GROQ_API_KEY_KAMU";
 
 const PAIRS = [
   "EURUSD","GBPUSD","USDJPY","AUDUSD","USDCHF","USDCAD","NZDUSD",
@@ -164,6 +164,41 @@ Format output JSON seperti ini:
     return JSON.parse(clean);
   } catch(e) {
     return { signal:"WAIT", summary:"Gagal mengambil analisis AI.", confidence:"LOW", trend:"—", sl_pips:0, tp_pips:0 };
+  }
+}
+
+// Reusable Groq call for auto trading engine (supports timeframe param)
+async function callGroqAI(symbol, candles, tick, tf="M5") {
+  const closes = candles.slice(-20).map(c=>c.close);
+  const last = closes[closes.length-1] || 0;
+  const first = closes[0] || 0;
+  const trend = last >= first ? "naik" : "turun";
+  const change = first ? (((last-first)/first)*100).toFixed(3) : "0";
+  const high20 = candles.length ? Math.max(...candles.slice(-20).map(c=>c.high)) : 0;
+  const low20  = candles.length ? Math.min(...candles.slice(-20).map(c=>c.low))  : 0;
+
+  const prompt = `Kamu analis forex. Analisis teknikal ${symbol} timeframe ${tf}.
+Data: trend ${trend} ${change}%, high=${high20}, low=${low20}, closes terbaru: ${closes.slice(-5).join(", ")}.
+Jawab JSON saja:
+{"signal":"BUY|SELL|WAIT","confidence":"HIGH|MEDIUM|LOW","trend":"...","support":0,"resistance":0,"sl_pips":50,"tp_pips":100,"summary":"..."}`;
+
+  try {
+    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method:"POST",
+      headers:{"Content-Type":"application/json","Authorization":`Bearer ${GROQ_API_KEY}`},
+      body: JSON.stringify({
+        model:"llama-3.3-70b-versatile", max_tokens:400,
+        messages:[
+          {role:"system",content:"Jawab hanya JSON valid, tanpa markdown."},
+          {role:"user",content:prompt}
+        ]
+      })
+    });
+    const data = await res.json();
+    const text = data.choices?.[0]?.message?.content||"{}";
+    return JSON.parse(text.replace(/```json|```/g,"").trim());
+  } catch {
+    return {signal:"WAIT",confidence:"LOW",trend:"—",sl_pips:50,tp_pips:100,summary:"Error"};
   }
 }
 
@@ -464,8 +499,25 @@ export default function App() {
   const [tab, setTab] = useState("chart");
   const [group, setGroup] = useState("FX");
 
+  // ── AUTO TRADING STATE ──
+  const [autoEnabled, setAutoEnabled]     = useState(false);
+  const [autoPairs, setAutoPairs]         = useState([]);       // pairs yg dipilih user
+  const [autoLot, setAutoLot]             = useState("0.01");
+  const [autoSL, setAutoSL]               = useState("50");
+  const [autoTP, setAutoTP]               = useState("100");
+  const [autoLog, setAutoLog]             = useState([]);       // activity log
+  const [autoStatus, setAutoStatus]       = useState({});       // per-pair status
+  const [lastCandleTime, setLastCandleTime] = useState({});    // track candle close
+
   const wsRef = useRef(null);
   const demoInterval = useRef(null);
+  const autoRef = useRef(null);
+  const autoPairsRef = useRef([]);
+  const autoEnabledRef = useRef(false);
+  const positionsRef = useRef([]);
+  const autoLotRef = useRef("0.01");
+  const autoSLRef = useRef("50");
+  const autoTPRef = useRef("100");
 
   const startDemo = useCallback(() => {
     setDemoMode(true);
@@ -525,18 +577,30 @@ export default function App() {
         } else if (msg.type === "candles") {
           setCandles(prev => ({...prev, [msg.symbol]: msg.data}));
         } else if (msg.type === "account" || msg.type === "init") {
-          setPositions(msg.positions || []);
+          const pos = msg.positions || [];
+          setPositions(pos);
+          positionsRef.current = pos;
           setAccount(msg.account);
         } else if (msg.type === "order_result") {
           if (msg.success) {
-            setOrderResult({ok:true, msg:`✓ ${msg.action||"Order"} berhasil! Ticket #${msg.ticket} @ ${msg.price}`});
+            const resultMsg = `✓ ${msg.action||"Order"} berhasil! Ticket #${msg.ticket} @ ${msg.price}`;
+            setOrderResult({ok:true, msg: resultMsg});
+            // log auto trading activity
+            addAutoLog(msg.symbol||"", msg.action||"ORDER", resultMsg, true);
+            setAutoStatus(prev=>({...prev, [msg.symbol]:{
+              lastAction: msg.action,
+              lastTime: new Date().toLocaleTimeString("id-ID"),
+              ticket: msg.ticket,
+            }}));
             // refresh positions
             setTimeout(()=>{
               if(wsRef.current?.readyState===1)
                 wsRef.current.send(JSON.stringify({type:"get_positions"}));
             }, 800);
           } else {
-            setOrderResult({ok:false, msg:`✗ Order gagal: ${msg.error||"Unknown error"}`});
+            const errMsg = `✗ Order gagal: ${msg.error||"Unknown error"}`;
+            setOrderResult({ok:false, msg: errMsg});
+            addAutoLog(msg.symbol||"", "ERROR", errMsg, false);
           }
           setTimeout(()=>setOrderResult(null), 6000);
         } else if (msg.type === "close_result") {
@@ -568,6 +632,163 @@ export default function App() {
   };
 
   const [orderResult, setOrderResult] = useState(null);
+
+  // ── AUTO TRADING ENGINE ──
+  const addAutoLog = (symbol, action, msg, ok) => {
+    const entry = {
+      time: new Date().toLocaleTimeString("id-ID"),
+      symbol, action, msg, ok,
+      id: Date.now(),
+    };
+    setAutoLog(prev => [entry, ...prev].slice(0, 100)); // keep last 100 logs
+  };
+
+  // Sync refs so interval can access latest state
+  useEffect(()=>{ autoPairsRef.current = autoPairs; }, [autoPairs]);
+  useEffect(()=>{ autoEnabledRef.current = autoEnabled; }, [autoEnabled]);
+  useEffect(()=>{ autoLotRef.current = autoLot; }, [autoLot]);
+  useEffect(()=>{ autoSLRef.current = autoSL; }, [autoSL]);
+  useEffect(()=>{ autoTPRef.current = autoTP; }, [autoTP]);
+
+  // ── H1 CANDLE CLOSE DETECTOR ──
+  // Checks every 15s if the hour just changed (H1 candle closed)
+  // H1 candle closes at XX:00:00 — we trigger during :00:00–:00:14
+  useEffect(()=>{
+    if (autoRef.current) clearInterval(autoRef.current);
+    autoRef.current = setInterval(()=>{
+      if (!autoEnabledRef.current) return;
+      const now = new Date();
+      const hour = now.getHours();
+      const mins = now.getMinutes();
+      const secs = now.getSeconds();
+
+      // H1 candle closes at the start of each new hour (:00:00)
+      const isH1Close = (mins === 0) && (secs < 15);
+      if (!isH1Close) return;
+
+      // candleKey = unique per-hour, prevents double trigger
+      const candleKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-H${hour}`;
+
+      setLastCandleTime(prev=>{
+        const pairs = autoPairsRef.current;
+        pairs.forEach(sym=>{
+          if (prev[sym] === candleKey) return; // already triggered this hour
+          prev = {...prev, [sym]: candleKey};
+          runAutoCheck(sym);
+        });
+        return {...prev};
+      });
+    }, 15000); // check every 15s
+    return ()=>clearInterval(autoRef.current);
+  }, [autoEnabled]);
+
+  const runAutoCheck = async (symbol) => {
+    if (!wsRef.current || wsRef.current.readyState !== 1) {
+      addAutoLog(symbol, "ERROR", `${symbol}: Tidak terhubung ke MT5`, false);
+      return;
+    }
+
+    addAutoLog(symbol, "SCAN", `H1 candle close — memulai scan ${symbol}`, null);
+
+    try {
+      // ── Guard 1: Cek posisi terbuka ──
+      const hasPosition = positionsRef.current.some(p => p.symbol === symbol);
+      if (hasPosition) {
+        addAutoLog(symbol, "SKIP", `${symbol}: posisi sudah ada, tunggu close dulu`, null);
+        return;
+      }
+
+      // ── Step 1: Fetch candles H1, H4, D1 ──
+      addAutoLog(symbol, "FETCH", `${symbol}: mengambil data H1, H4, D1...`, null);
+      for (const tf of ["H1","H4","D1"]) {
+        wsRef.current.send(JSON.stringify({type:"get_candles", symbol, timeframe:tf, count:100}));
+      }
+      await new Promise(r=>setTimeout(r,3000)); // wait for bridge to respond
+
+      // ── Step 2: Analyze H1 (primary — must be HIGH) ──
+      addAutoLog(symbol, "AI", `${symbol}: analisis H1...`, null);
+      const h1Result = await callGroqAI(symbol, [], {}, "H1");
+      addAutoLog(symbol, "H1",
+        `${symbol} H1 → ${h1Result.signal} (${h1Result.confidence}) | ${h1Result.trend||""}`,
+        h1Result.signal !== "WAIT" && h1Result.confidence === "HIGH" ? true : null
+      );
+
+      if (h1Result.signal === "WAIT" || h1Result.confidence !== "HIGH") {
+        addAutoLog(symbol, "SKIP", `${symbol}: H1 tidak memenuhi syarat — butuh HIGH confidence`, null);
+        return;
+      }
+
+      // ── Step 3: Confirm H4 ──
+      addAutoLog(symbol, "AI", `${symbol}: konfirmasi H4...`, null);
+      const h4Result = await callGroqAI(symbol, [], {}, "H4");
+      addAutoLog(symbol, "H4", `${symbol} H4 → ${h4Result.signal}`, null);
+
+      // ── Step 4: Confirm D1 (big picture) ──
+      addAutoLog(symbol, "AI", `${symbol}: konfirmasi D1...`, null);
+      const d1Result = await callGroqAI(symbol, [], {}, "D1");
+      addAutoLog(symbol, "D1", `${symbol} D1 → ${d1Result.signal}`, null);
+
+      // ── Step 5: MTF Consensus (min 2 dari 3 harus setuju) ──
+      const signals = [h1Result.signal, h4Result.signal, d1Result.signal];
+      const buyCount  = signals.filter(s=>s==="BUY").length;
+      const sellCount = signals.filter(s=>s==="SELL").length;
+      const consensus = buyCount >= 2 ? "BUY" : sellCount >= 2 ? "SELL" : "WAIT";
+
+      addAutoLog(symbol, "MTF",
+        `${symbol}: H1:${signals[0]} H4:${signals[1]} D1:${signals[2]} → ${consensus}`,
+        consensus !== "WAIT"
+      );
+
+      if (consensus === "WAIT") {
+        addAutoLog(symbol, "SKIP", `${symbol}: MTF tidak konsensus, tidak ada order`, null);
+        return;
+      }
+
+      // ── Step 6: Calculate SL/TP ──
+      const pip = {XAUUSD:0.1,XAGUSD:0.01,USOIL:0.01,UKOIL:0.01,USTEC:1,US30:1,US500:0.1,BTCUSD:1,ETHUSD:0.1}[symbol]||0.0001;
+      const lot    = parseFloat(autoLotRef.current) || 0.01;
+      const slPips = parseFloat(autoSLRef.current)  || 50;
+      const tpPips = parseFloat(autoTPRef.current)  || 100;
+
+      // Use AI's suggested SL/TP if available, else use user setting
+      const finalSL = h1Result.sl_pips > 0 ? h1Result.sl_pips : slPips;
+      const finalTP = h1Result.tp_pips > 0 ? h1Result.tp_pips : tpPips;
+
+      // ── Step 7: Fire order ──
+      wsRef.current.send(JSON.stringify({
+        type:   "send_order",
+        symbol,
+        action: consensus,
+        volume: lot,
+        sl:     finalSL * pip,  // bridge expects price distance
+        tp:     finalTP * pip,
+      }));
+
+      addAutoLog(symbol, "ORDER",
+        `🚀 ${consensus} ${lot} lot ${symbol} | SL:${finalSL}p TP:${finalTP}p`,
+        null
+      );
+
+    } catch(err) {
+      addAutoLog(symbol, "ERROR", `${symbol}: Exception — ${err.message}`, false);
+    }
+  };
+
+  const handleAutoToggle = () => {
+    const next = !autoEnabled;
+    setAutoEnabled(next);
+    if (next) {
+      addAutoLog("SYSTEM", "START", `Auto trading dimulai — ${autoPairs.length} pairs aktif | Trigger: H1 candle close | Analisis: H1+H4+D1`, true);
+    } else {
+      addAutoLog("SYSTEM", "STOP", "Auto trading dihentikan", null);
+    }
+  };
+
+  const toggleAutoPair = (sym) => {
+    setAutoPairs(prev =>
+      prev.includes(sym) ? prev.filter(p=>p!==sym) : [...prev, sym]
+    );
+  };
 
   const handleOrder = (symbol, action, volume, sl, tp) => {
     if (!demoMode && wsRef.current?.readyState === 1) {
@@ -698,12 +919,14 @@ export default function App() {
 
           {/* TABS */}
           <div style={{display:"flex",gap:0,borderBottom:"1px solid #1e293b"}}>
-            {[["chart","📈 Chart & Order"],["positions","📋 Positions"]].map(([key,label])=>(
+            {[["chart","📈 Chart & Order"],["positions","📋 Positions"],["auto","🤖 Auto Trading"]].map(([key,label])=>(
               <button key={key} onClick={()=>setTab(key)} style={{
                 background:"transparent",border:"none",borderBottom:`2px solid ${tab===key?"#1d4ed8":"transparent"}`,
-                color:tab===key?"#93c5fd":"#475569",padding:"8px 16px",cursor:"pointer",
+                color:tab===key?"#93c5fd":key==="auto"&&autoEnabled?"#4ade80":"#475569",
+                padding:"8px 16px",cursor:"pointer",
                 fontFamily:"monospace",fontSize:12,letterSpacing:0.5,transition:"all 0.15s",
-              }}>{label}</button>
+                fontWeight:key==="auto"&&autoEnabled?700:400,
+              }}>{label}{key==="auto"&&autoEnabled?" ●":""}</button>
             ))}
           </div>
 
@@ -752,6 +975,136 @@ export default function App() {
             <div style={{background:"#070e1d",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
               <div style={{color:"#475569",fontSize:10,letterSpacing:2,marginBottom:12}}>📋 OPEN POSITIONS ({positions.length})</div>
               <PositionsTable positions={positions} onClose={handleClose}/>
+            </div>
+          )}
+
+          {tab==="auto" && (
+            <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+              {/* ── Control Panel ── */}
+              <div style={{background:"#070e1d",border:`1px solid ${autoEnabled?"#16a34a44":"#1e293b"}`,borderRadius:10,padding:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                  <div>
+                    <div style={{color:"#e2e8f0",fontSize:13,fontWeight:700,letterSpacing:1}}>🤖 AUTO TRADING ENGINE</div>
+                    <div style={{color:"#475569",fontSize:10,marginTop:2}}>
+                      Trigger: H1 candle close · Analisis: H1 (utama) + H4 + D1 · Kondisi: HIGH confidence + MTF consensus · Max: 1 posisi/pair
+                    </div>
+                  </div>
+                  <button
+                    onClick={handleAutoToggle}
+                    disabled={autoPairs.length===0}
+                    style={{
+                      padding:"10px 24px",borderRadius:6,border:"none",cursor:autoPairs.length===0?"not-allowed":"pointer",
+                      fontFamily:"monospace",fontSize:12,fontWeight:700,letterSpacing:1,
+                      background:autoEnabled?"linear-gradient(135deg,#dc2626,#b91c1c)":"linear-gradient(135deg,#16a34a,#15803d)",
+                      color:"#fff",opacity:autoPairs.length===0?0.4:1,
+                    }}>
+                    {autoEnabled?"⏹ STOP AUTO":"▶ START AUTO"}
+                  </button>
+                </div>
+
+                {/* Settings row */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+                  {[
+                    ["Default Lot",autoLot,setAutoLot,"#94a3b8"],
+                    ["SL (pips)",autoSL,setAutoSL,"#f87171"],
+                    ["TP (pips)",autoTP,setAutoTP,"#a78bfa"],
+                  ].map(([label,val,setter,color])=>(
+                    <div key={label}>
+                      <div style={{color:color,fontSize:9,fontFamily:"monospace",letterSpacing:1,marginBottom:3}}>{label}</div>
+                      <input
+                        value={val} onChange={e=>setter(e.target.value)}
+                        disabled={autoEnabled}
+                        style={{width:"100%",background:"#0a1628",border:`1px solid ${color}33`,borderRadius:4,padding:"6px 8px",color:"#e2e8f0",fontFamily:"monospace",fontSize:12,boxSizing:"border-box",opacity:autoEnabled?0.5:1}}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Status indicators */}
+                <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                  <span style={{fontSize:10,fontFamily:"monospace",color:"#475569"}}>
+                    Status: <span style={{color:autoEnabled?"#4ade80":"#475569",fontWeight:700}}>{autoEnabled?"● AKTIF":"○ STANDBY"}</span>
+                  </span>
+                  <span style={{fontSize:10,fontFamily:"monospace",color:"#475569"}}>
+                    Pairs aktif: <span style={{color:"#22d3ee",fontWeight:700}}>{autoPairs.length}</span>
+                  </span>
+                  <span style={{fontSize:10,fontFamily:"monospace",color:"#475569"}}>
+                    Posisi terbuka: <span style={{color:"#fb923c",fontWeight:700}}>{positions.length}</span>
+                  </span>
+                </div>
+
+                {autoPairs.length===0 && (
+                  <div style={{marginTop:10,padding:"6px 10px",background:"#1c1000",border:"1px solid #fb923c33",borderRadius:4,color:"#fb923c",fontSize:10,fontFamily:"monospace"}}>
+                    ⚠ Pilih minimal 1 pair di bawah untuk mengaktifkan auto trading
+                  </div>
+                )}
+              </div>
+
+              {/* ── Pair Selector ── */}
+              <div style={{background:"#070e1d",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+                <div style={{color:"#475569",fontSize:10,letterSpacing:2,marginBottom:10}}>PAIR SELECTION ({autoPairs.length} dipilih)</div>
+                {Object.entries(GROUPS).map(([grpName, grpPairs])=>(
+                  <div key={grpName} style={{marginBottom:10}}>
+                    <div style={{color:"#334155",fontSize:9,letterSpacing:2,marginBottom:5,fontFamily:"monospace"}}>{grpName}</div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:4}}>
+                      {grpPairs.map(sym=>{
+                        const isOn = autoPairs.includes(sym);
+                        const hasPos = positions.some(p=>p.symbol===sym);
+                        const lastSt = autoStatus[sym];
+                        return (
+                          <button key={sym} onClick={()=>!autoEnabled && toggleAutoPair(sym)} style={{
+                            padding:"4px 8px",borderRadius:4,border:`1px solid ${isOn?"#1d4ed8":"#1e293b"}`,
+                            background:isOn?"#0c1a2e":"#0a0f1a",
+                            color:isOn?"#93c5fd":"#475569",
+                            fontFamily:"monospace",fontSize:9,cursor:autoEnabled?"not-allowed":"pointer",
+                            position:"relative",opacity:autoEnabled&&!isOn?0.4:1,
+                          }}>
+                            {sym}
+                            {hasPos && <span style={{marginLeft:3,color:"#4ade80"}}>●</span>}
+                            {lastSt && <span style={{marginLeft:3,color:lastSt.lastAction==="BUY"?"#4ade80":"#f87171",fontSize:7}}>
+                              {lastSt.lastAction==="BUY"?"▲":"▼"}
+                            </span>}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* ── Activity Log ── */}
+              <div style={{background:"#070e1d",border:"1px solid #1e293b",borderRadius:10,padding:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                  <div style={{color:"#475569",fontSize:10,letterSpacing:2}}>ACTIVITY LOG ({autoLog.length})</div>
+                  <button onClick={()=>setAutoLog([])} style={{background:"none",border:"1px solid #1e293b",color:"#475569",padding:"2px 8px",borderRadius:3,cursor:"pointer",fontSize:9,fontFamily:"monospace"}}>CLEAR</button>
+                </div>
+                <div style={{maxHeight:300,overflowY:"auto",display:"flex",flexDirection:"column",gap:2}}>
+                  {autoLog.length===0 && (
+                    <div style={{color:"#334155",fontSize:11,fontFamily:"monospace",textAlign:"center",padding:"20px 0"}}>Belum ada aktivitas</div>
+                  )}
+                  {autoLog.map(log=>(
+                    <div key={log.id} style={{
+                      display:"grid",gridTemplateColumns:"60px 50px 70px 1fr",gap:6,
+                      padding:"4px 6px",borderRadius:3,
+                      background:log.ok===true?"#052e1699":log.ok===false?"#2d0b0b99":"#0a0f1a",
+                      borderLeft:`2px solid ${log.ok===true?"#16a34a":log.ok===false?"#dc2626":"#334155"}`,
+                      fontSize:9,fontFamily:"monospace",
+                    }}>
+                      <span style={{color:"#334155"}}>{log.time}</span>
+                      <span style={{color:"#22d3ee",fontWeight:700}}>{log.symbol}</span>
+                      <span style={{color:
+                        log.action==="SIGNAL"?"#f59e0b":
+                        log.action==="ORDER"?"#a78bfa":
+                        log.action==="ERROR"?"#f87171":
+                        log.action==="SKIP"?"#475569":"#64748b",
+                        fontWeight:700}}>{log.action}</span>
+                      <span style={{color:"#94a3b8"}}>{log.msg}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
             </div>
           )}
         </div>
