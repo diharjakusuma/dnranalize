@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 // ─── GROQ API KEY — Ganti dengan key kamu dari console.groq.com ───
-const GROQ_API_KEY = "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";
+const GROQ_API_KEY = "GANTI_DENGAN_GROQ_API_KEY_KAMU";
 
 const PAIRS = [
   "EURUSD","GBPUSD","USDJPY","AUDUSD","USDCHF","USDCAD","NZDUSD",
@@ -224,19 +224,16 @@ function SignalBadge({ signal, confidence }) {
   );
 }
 
-function OrderPanel({ symbol, tick, onOrder, connected, demoMode }) {
+function OrderPanel({ symbol, tick, onOrder, connected, demoMode, orderResult }) {
   const [vol, setVol] = useState("0.01");
   const [slPips, setSlPips] = useState("");
   const [tpPips, setTpPips] = useState("");
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
 
   const d = DIGITS[symbol] || 5;
   const pip = {XAUUSD:0.1,XAGUSD:0.01,USOIL:0.01,UKOIL:0.01,USTEC:1,US30:1,US500:0.1,BTCUSD:1,ETHUSD:0.1}[symbol]||0.0001;
   const sl = parseFloat(slPips) || 0;
   const tp = parseFloat(tpPips) || 0;
 
-  // Calculate actual SL/TP prices
   const slBuy  = sl && tick ? +(tick.ask - sl * pip).toFixed(d) : null;
   const slSell = sl && tick ? +(tick.bid + sl * pip).toFixed(d) : null;
   const tpBuy  = tp && tick ? +(tick.ask + tp * pip).toFixed(d) : null;
@@ -245,18 +242,12 @@ function OrderPanel({ symbol, tick, onOrder, connected, demoMode }) {
 
   const go = (action) => {
     if (!connected || demoMode) {
-      setResult({ok:false, msg:"⚠ Hubungkan ke MT5 untuk order nyata"});
-      setTimeout(()=>setResult(null), 4000);
+      onOrder(symbol, action, vol, 0, 0);
       return;
     }
     const slPrice = action==="BUY" ? (slBuy||0) : (slSell||0);
     const tpPrice = action==="BUY" ? (tpBuy||0) : (tpSell||0);
-    setLoading(true);
-    onOrder(symbol, action, vol, slPrice, tpPrice, (res)=>{
-      setLoading(false);
-      setResult(res);
-      setTimeout(()=>setResult(null), 5000);
-    });
+    onOrder(symbol, action, vol, slPrice, tpPrice);
   };
 
   const inpStyle = (color) => ({
@@ -330,27 +321,27 @@ function OrderPanel({ symbol, tick, onOrder, connected, demoMode }) {
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
         <button
           onClick={()=>go("BUY")}
-          disabled={loading}
-          style={{padding:"10px 0",background:loading?"#0f2e1a":"linear-gradient(135deg,#16a34a,#15803d)",border:"1px solid #16a34a55",borderRadius:6,color:"#fff",fontFamily:"monospace",fontSize:13,fontWeight:700,cursor:loading?"not-allowed":"pointer",letterSpacing:1,transition:"all .15s"}}>
-          {loading?"⟳ ...":"▲ BUY"}<br/>
+          style={{padding:"10px 0",background:"linear-gradient(135deg,#16a34a,#15803d)",border:"1px solid #16a34a55",borderRadius:6,color:"#fff",fontFamily:"monospace",fontSize:13,fontWeight:700,cursor:"pointer",letterSpacing:1,transition:"opacity .15s"}}
+          onMouseOver={e=>e.currentTarget.style.opacity=".85"} onMouseOut={e=>e.currentTarget.style.opacity="1"}>
+          ▲ BUY<br/>
           <span style={{fontSize:10,opacity:.8}}>{tick?.ask?.toFixed(d)}</span>
         </button>
         <button
           onClick={()=>go("SELL")}
-          disabled={loading}
-          style={{padding:"10px 0",background:loading?"#2e0f0f":"linear-gradient(135deg,#dc2626,#b91c1c)",border:"1px solid #dc262655",borderRadius:6,color:"#fff",fontFamily:"monospace",fontSize:13,fontWeight:700,cursor:loading?"not-allowed":"pointer",letterSpacing:1,transition:"all .15s"}}>
-          {loading?"⟳ ...":"▼ SELL"}<br/>
+          style={{padding:"10px 0",background:"linear-gradient(135deg,#dc2626,#b91c1c)",border:"1px solid #dc262655",borderRadius:6,color:"#fff",fontFamily:"monospace",fontSize:13,fontWeight:700,cursor:"pointer",letterSpacing:1,transition:"opacity .15s"}}
+          onMouseOver={e=>e.currentTarget.style.opacity=".85"} onMouseOut={e=>e.currentTarget.style.opacity="1"}>
+          ▼ SELL<br/>
           <span style={{fontSize:10,opacity:.8}}>{tick?.bid?.toFixed(d)}</span>
         </button>
       </div>
 
-      {/* Result notification */}
-      {result && (
+      {/* Result notification from parent */}
+      {orderResult && (
         <div style={{marginTop:8,padding:"6px 10px",borderRadius:4,fontSize:10,fontFamily:"monospace",
-          background:result.ok?"#052e16":"#2d0b0b",
-          border:`1px solid ${result.ok?"#16a34a44":"#dc262644"}`,
-          color:result.ok?"#4ade80":"#f87171"}}>
-          {result.msg}
+          background:orderResult.ok?"#052e16":"#2d0b0b",
+          border:`1px solid ${orderResult.ok?"#16a34a44":"#dc262644"}`,
+          color:orderResult.ok?"#4ade80":"#f87171"}}>
+          {orderResult.msg}
         </div>
       )}
     </div>
@@ -537,23 +528,17 @@ export default function App() {
           setPositions(msg.positions || []);
           setAccount(msg.account);
         } else if (msg.type === "order_result") {
-          // trigger callback if exists
-          if (msg.reqId && orderCallbacks.current[msg.reqId]) {
-            const cb = orderCallbacks.current[msg.reqId];
-            delete orderCallbacks.current[msg.reqId];
-            if (msg.success) {
-              cb({ok:true, msg:`✓ ${msg.action||"Order"} berhasil! Ticket #${msg.ticket} @ ${msg.price}`});
-            } else {
-              cb({ok:false, msg:`✗ Order gagal: ${msg.error}`});
-            }
-          }
-          // refresh positions after order
           if (msg.success) {
+            setOrderResult({ok:true, msg:`✓ ${msg.action||"Order"} berhasil! Ticket #${msg.ticket} @ ${msg.price}`});
+            // refresh positions
             setTimeout(()=>{
               if(wsRef.current?.readyState===1)
                 wsRef.current.send(JSON.stringify({type:"get_positions"}));
-            }, 500);
+            }, 800);
+          } else {
+            setOrderResult({ok:false, msg:`✗ Order gagal: ${msg.error||"Unknown error"}`});
           }
+          setTimeout(()=>setOrderResult(null), 6000);
         } else if (msg.type === "close_result") {
           if (msg.success) {
             setPositions(prev => prev.filter(p => p.ticket !== msg.ticket));
@@ -582,22 +567,21 @@ export default function App() {
     for (const p of PAIRS) await handleAnalyze(p);
   };
 
-  // Map of pending order callbacks
-  const orderCallbacks = useRef({});
+  const [orderResult, setOrderResult] = useState(null);
 
-  const handleOrder = (symbol, action, volume, sl, tp, callback) => {
+  const handleOrder = (symbol, action, volume, sl, tp) => {
     if (!demoMode && wsRef.current?.readyState === 1) {
-      const reqId = Date.now().toString();
-      if (callback) orderCallbacks.current[reqId] = callback;
       wsRef.current.send(JSON.stringify({
-        type:"send_order", symbol, action,
-        volume:parseFloat(volume),
-        sl:parseFloat(sl)||0,
-        tp:parseFloat(tp)||0,
-        reqId,
+        type: "send_order",
+        symbol, action,
+        volume: parseFloat(volume) || 0.01,
+        sl: parseFloat(sl) || 0,
+        tp: parseFloat(tp) || 0,
       }));
+      setOrderResult({ok:null, msg:`⟳ Mengirim ${action} ${volume} lot ${symbol}...`});
     } else {
-      if (callback) callback({ok:false, msg:"⚠ Demo mode — hubungkan ke MT5 untuk order nyata"});
+      setOrderResult({ok:false, msg:"⚠ Demo mode — hubungkan ke MT5 untuk order nyata"});
+      setTimeout(()=>setOrderResult(null), 4000);
     }
   };
 
@@ -760,7 +744,7 @@ export default function App() {
                 </div>
               )}
 
-              <OrderPanel symbol={selected} tick={ticks[selected]} onOrder={handleOrder} connected={wsStatus==="connected"} demoMode={demoMode}/>
+              <OrderPanel symbol={selected} tick={ticks[selected]} onOrder={handleOrder} connected={wsStatus==="connected"} demoMode={demoMode} orderResult={orderResult}/>
             </>
           )}
 
