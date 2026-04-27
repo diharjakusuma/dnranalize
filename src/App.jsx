@@ -64,6 +64,56 @@ const VOL_MAP = {
 const SPR_MAP = {
   XAUUSD:30,BTCUSD:50,USTEC:15,US30:20,USDJPY:2,EURJPY:2,GBPJPY:3,ETHUSD:5,USOIL:3,UKOIL:3,
 };
+
+// ─── Default SL/TP per instrument (fallback jika AI tidak return nilai) ───
+// Nilai dalam PIPS sesuai karakteristik volatilitas masing-masing instrument
+const DEFAULT_SLTP = {
+  // FX Major — volatilitas rendah-sedang
+  EURUSD:{sl:30,  tp:60,  desc:"30/60p"},
+  GBPUSD:{sl:40,  tp:80,  desc:"40/80p"},
+  USDJPY:{sl:30,  tp:60,  desc:"30/60p"},
+  AUDUSD:{sl:30,  tp:60,  desc:"30/60p"},
+  USDCHF:{sl:30,  tp:60,  desc:"30/60p"},
+  USDCAD:{sl:30,  tp:60,  desc:"30/60p"},
+  NZDUSD:{sl:30,  tp:60,  desc:"30/60p"},
+  // FX Cross — volatilitas sedang
+  EURGBP:{sl:25,  tp:50,  desc:"25/50p"},
+  EURJPY:{sl:40,  tp:80,  desc:"40/80p"},
+  EURCAD:{sl:35,  tp:70,  desc:"35/70p"},
+  EURAUD:{sl:40,  tp:80,  desc:"40/80p"},
+  EURNZD:{sl:40,  tp:80,  desc:"40/80p"},
+  EURCHF:{sl:25,  tp:50,  desc:"25/50p"},
+  GBPJPY:{sl:60,  tp:120, desc:"60/120p"},
+  GBPAUD:{sl:55,  tp:110, desc:"55/110p"},
+  GBPCAD:{sl:50,  tp:100, desc:"50/100p"},
+  GBPCHF:{sl:40,  tp:80,  desc:"40/80p"},
+  GBPNZD:{sl:55,  tp:110, desc:"55/110p"},
+  AUDJPY:{sl:35,  tp:70,  desc:"35/70p"},
+  AUDCAD:{sl:30,  tp:60,  desc:"30/60p"},
+  AUDCHF:{sl:30,  tp:60,  desc:"30/60p"},
+  AUDNZD:{sl:30,  tp:60,  desc:"30/60p"},
+  CADJPY:{sl:35,  tp:70,  desc:"35/70p"},
+  CHFJPY:{sl:35,  tp:70,  desc:"35/70p"},
+  NZDJPY:{sl:35,  tp:70,  desc:"35/70p"},
+  // Metals — volatilitas tinggi
+  XAUUSD:{sl:200, tp:400, desc:"200/400p"},
+  XAGUSD:{sl:150, tp:300, desc:"150/300p"},
+  // Energy — volatilitas tinggi
+  USOIL: {sl:100, tp:200, desc:"100/200p"},
+  UKOIL: {sl:100, tp:200, desc:"100/200p"},
+  // Indices — volatilitas sangat tinggi
+  USTEC: {sl:150, tp:300, desc:"150/300p"},
+  US30:  {sl:200, tp:400, desc:"200/400p"},
+  US500: {sl:120, tp:240, desc:"120/240p"},
+  // Crypto — volatilitas ekstrem
+  BTCUSD:{sl:800, tp:1600,desc:"800/1600p"},
+  ETHUSD:{sl:400, tp:800, desc:"400/800p"},
+};
+// Helper: get SL/TP fallback for a symbol
+function getDefaultSLTP(symbol) {
+  return DEFAULT_SLTP[symbol] || {sl:50, tp:100, desc:"50/100p"};
+}
+
 function getVol(s){ return VOL_MAP[s]||0.0007; }
 function getSpr(s){ return SPR_MAP[s]||1.2; }
 
@@ -503,8 +553,6 @@ export default function App() {
   const [autoEnabled, setAutoEnabled]     = useState(false);
   const [autoPairs, setAutoPairs]         = useState([]);       // pairs yg dipilih user
   const [autoLot, setAutoLot]             = useState("0.01");
-  const [autoSL, setAutoSL]               = useState("50");
-  const [autoTP, setAutoTP]               = useState("100");
   const [autoLog, setAutoLog]             = useState([]);       // activity log
   const [autoStatus, setAutoStatus]       = useState({});       // per-pair status
   const [lastCandleTime, setLastCandleTime] = useState({});    // track candle close
@@ -516,8 +564,6 @@ export default function App() {
   const autoEnabledRef = useRef(false);
   const positionsRef = useRef([]);
   const autoLotRef = useRef("0.01");
-  const autoSLRef = useRef("50");
-  const autoTPRef = useRef("100");
 
   const startDemo = useCallback(() => {
     setDemoMode(true);
@@ -647,8 +693,6 @@ export default function App() {
   useEffect(()=>{ autoPairsRef.current = autoPairs; }, [autoPairs]);
   useEffect(()=>{ autoEnabledRef.current = autoEnabled; }, [autoEnabled]);
   useEffect(()=>{ autoLotRef.current = autoLot; }, [autoLot]);
-  useEffect(()=>{ autoSLRef.current = autoSL; }, [autoSL]);
-  useEffect(()=>{ autoTPRef.current = autoTP; }, [autoTP]);
 
   // ── H1 CANDLE CLOSE DETECTOR ──
   // Checks every 15s if the hour just changed (H1 candle closed)
@@ -746,13 +790,21 @@ export default function App() {
 
       // ── Step 6: Calculate SL/TP ──
       const pip = {XAUUSD:0.1,XAGUSD:0.01,USOIL:0.01,UKOIL:0.01,USTEC:1,US30:1,US500:0.1,BTCUSD:1,ETHUSD:0.1}[symbol]||0.0001;
-      const lot    = parseFloat(autoLotRef.current) || 0.01;
-      const slPips = parseFloat(autoSLRef.current)  || 50;
-      const tpPips = parseFloat(autoTPRef.current)  || 100;
+      const lot = parseFloat(autoLotRef.current) || 0.01;
 
-      // Use AI's suggested SL/TP if available, else use user setting
-      const finalSL = h1Result.sl_pips > 0 ? h1Result.sl_pips : slPips;
-      const finalTP = h1Result.tp_pips > 0 ? h1Result.tp_pips : tpPips;
+      // Priority: 1) AI result  2) Per-symbol default  3) Last resort 50/100
+      const symDefault = getDefaultSLTP(symbol);
+      const finalSL = (h1Result.sl_pips > 0)
+        ? h1Result.sl_pips
+        : symDefault.sl;
+      const finalTP = (h1Result.tp_pips > 0)
+        ? h1Result.tp_pips
+        : symDefault.tp;
+
+      const slSource = h1Result.sl_pips > 0 ? "AI" : "default";
+      addAutoLog(symbol, "SL/TP",
+        `${symbol}: SL=${finalSL}p TP=${finalTP}p (sumber: ${slSource})`, null
+      );
 
       // ── Step 7: Fire order ──
       wsRef.current.send(JSON.stringify({
@@ -760,7 +812,7 @@ export default function App() {
         symbol,
         action: consensus,
         volume: lot,
-        sl:     finalSL * pip,  // bridge expects price distance
+        sl:     finalSL * pip,
         tp:     finalTP * pip,
       }));
 
@@ -1004,21 +1056,26 @@ export default function App() {
                 </div>
 
                 {/* Settings row */}
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
-                  {[
-                    ["Default Lot",autoLot,setAutoLot,"#94a3b8"],
-                    ["SL (pips)",autoSL,setAutoSL,"#f87171"],
-                    ["TP (pips)",autoTP,setAutoTP,"#a78bfa"],
-                  ].map(([label,val,setter,color])=>(
-                    <div key={label}>
-                      <div style={{color:color,fontSize:9,fontFamily:"monospace",letterSpacing:1,marginBottom:3}}>{label}</div>
-                      <input
-                        value={val} onChange={e=>setter(e.target.value)}
-                        disabled={autoEnabled}
-                        style={{width:"100%",background:"#0a1628",border:`1px solid ${color}33`,borderRadius:4,padding:"6px 8px",color:"#e2e8f0",fontFamily:"monospace",fontSize:12,boxSizing:"border-box",opacity:autoEnabled?0.5:1}}
-                      />
+                <div style={{display:"grid",gridTemplateColumns:"1fr 2fr",gap:10,marginBottom:14}}>
+                  <div>
+                    <div style={{color:"#94a3b8",fontSize:9,fontFamily:"monospace",letterSpacing:1,marginBottom:3}}>LOT SIZE</div>
+                    <input
+                      value={autoLot} onChange={e=>setAutoLot(e.target.value)}
+                      disabled={autoEnabled}
+                      style={{width:"100%",background:"#0a1628",border:"1px solid #94a3b833",borderRadius:4,padding:"6px 8px",color:"#e2e8f0",fontFamily:"monospace",fontSize:12,boxSizing:"border-box",opacity:autoEnabled?0.5:1}}
+                    />
+                  </div>
+                  <div style={{background:"#0a1628",border:"1px solid #1e293b",borderRadius:4,padding:"6px 10px"}}>
+                    <div style={{color:"#475569",fontSize:8,fontFamily:"monospace",letterSpacing:1,marginBottom:4}}>SL/TP — OTOMATIS PER INSTRUMENT</div>
+                    <div style={{color:"#334155",fontSize:8,fontFamily:"monospace",lineHeight:1.8}}>
+                      AI akan tentukan SL/TP dari analisis.
+                      Jika AI tidak return nilai, sistem pakai default per instrument:
+                      <span style={{color:"#4ade80"}}> FX 30/60p</span> ·
+                      <span style={{color:"#fb923c"}}> XAU 200/400p</span> ·
+                      <span style={{color:"#f87171"}}> BTC 800/1600p</span> ·
+                      <span style={{color:"#a78bfa"}}> OIL 100/200p</span>
                     </div>
-                  ))}
+                  </div>
                 </div>
 
                 {/* Status indicators */}
@@ -1052,20 +1109,33 @@ export default function App() {
                         const isOn = autoPairs.includes(sym);
                         const hasPos = positions.some(p=>p.symbol===sym);
                         const lastSt = autoStatus[sym];
-                        return (
-                          <button key={sym} onClick={()=>!autoEnabled && toggleAutoPair(sym)} style={{
-                            padding:"4px 8px",borderRadius:4,border:`1px solid ${isOn?"#1d4ed8":"#1e293b"}`,
-                            background:isOn?"#0c1a2e":"#0a0f1a",
-                            color:isOn?"#93c5fd":"#475569",
-                            fontFamily:"monospace",fontSize:9,cursor:autoEnabled?"not-allowed":"pointer",
-                            position:"relative",opacity:autoEnabled&&!isOn?0.4:1,
-                          }}>
-                            {sym}
-                            {hasPos && <span style={{marginLeft:3,color:"#4ade80"}}>●</span>}
-                            {lastSt && <span style={{marginLeft:3,color:lastSt.lastAction==="BUY"?"#4ade80":"#f87171",fontSize:7}}>
-                              {lastSt.lastAction==="BUY"?"▲":"▼"}
-                            </span>}
-                          </button>
+                        const def = getDefaultSLTP(sym);
+                      return (
+                          <div key={sym} style={{position:"relative",display:"inline-block"}}>
+                            <button
+                              onClick={()=>!autoEnabled && toggleAutoPair(sym)}
+                              title={`SL: ${def.sl}p | TP: ${def.tp}p (fallback)`}
+                              style={{
+                                padding:"4px 8px",borderRadius:4,
+                                border:`1px solid ${isOn?"#1d4ed8":"#1e293b"}`,
+                                background:isOn?"#0c1a2e":"#0a0f1a",
+                                color:isOn?"#93c5fd":"#475569",
+                                fontFamily:"monospace",fontSize:9,
+                                cursor:autoEnabled?"not-allowed":"pointer",
+                                opacity:autoEnabled&&!isOn?0.4:1,
+                              }}>
+                              {sym}
+                              {hasPos && <span style={{marginLeft:3,color:"#4ade80"}}>●</span>}
+                              {lastSt && <span style={{marginLeft:3,color:lastSt.lastAction==="BUY"?"#4ade80":"#f87171",fontSize:7}}>
+                                {lastSt.lastAction==="BUY"?"▲":"▼"}
+                              </span>}
+                            </button>
+                            {isOn && (
+                              <div style={{fontSize:7,color:"#334155",textAlign:"center",fontFamily:"monospace",lineHeight:1,marginTop:1}}>
+                                {def.desc}
+                              </div>
+                            )}
+                          </div>
                         );
                       })}
                     </div>
