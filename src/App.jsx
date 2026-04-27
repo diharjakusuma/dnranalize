@@ -184,26 +184,48 @@ Format output JSON seperti ini:
         ]
       })
     });
+    if (!res.ok) {
+      const errBody = await res.json().catch(()=>({}));
+      return safeAIResult({}, errBody?.error?.message || `HTTP ${res.status}`);
+    }
     const data = await res.json();
-    const text = data.choices?.[0]?.message?.content || "{}";
-    const clean = text.replace(/```json|```/g,"").trim();
-    return JSON.parse(clean);
+    const raw   = data.choices?.[0]?.message?.content || "";
+    const match = raw.replace(/```json|```/gi,"").trim().match(/\{[\s\S]*\}/);
+    if (!match) return safeAIResult({}, "no JSON in response");
+    return safeAIResult(JSON.parse(match[0]));
   } catch(e) {
-    return { signal:"WAIT", summary:"Gagal mengambil analisis AI.", confidence:"LOW", trend:"—", sl_pips:0, tp_pips:0 };
+    return safeAIResult({}, e.message);
   }
+}
+
+// ── Canonical fallback — semua field selalu defined ──
+function safeAIResult(partial={}, errMsg="") {
+  const SIGS  = ["BUY","SELL","WAIT"];
+  const CONFS = ["HIGH","MEDIUM","LOW"];
+  return {
+    signal:     SIGS.includes(partial.signal)   ? partial.signal     : "WAIT",
+    confidence: CONFS.includes(partial.confidence) ? partial.confidence : "LOW",
+    trend:      partial.trend      || (errMsg ? `ERR: ${errMsg}` : "—"),
+    support:    Number(partial.support)    || 0,
+    resistance: Number(partial.resistance) || 0,
+    sl_pips:    Number(partial.sl_pips)    || 0,
+    tp_pips:    Number(partial.tp_pips)    || 0,
+    summary:    partial.summary    || errMsg || "No summary",
+    signal_reason: partial.signal_reason || "",
+  };
 }
 
 async function callGroqAI(symbol, candles, tick, tf="M5") {
   const closes = candles.slice(-20).map(c=>c.close);
-  const last = closes[closes.length-1] || 0;
-  const first = closes[0] || 0;
-  const trend = last >= first ? "naik" : "turun";
+  const last   = closes[closes.length-1] || 0;
+  const first  = closes[0] || 0;
+  const trend  = last >= first ? "naik" : "turun";
   const change = first ? (((last-first)/first)*100).toFixed(3) : "0";
   const high20 = candles.length ? Math.max(...candles.slice(-20).map(c=>c.high)) : 0;
   const low20  = candles.length ? Math.min(...candles.slice(-20).map(c=>c.low))  : 0;
   const prompt = `Kamu analis forex. Analisis teknikal ${symbol} timeframe ${tf}.
 Data: trend ${trend} ${change}%, high=${high20}, low=${low20}, closes terbaru: ${closes.slice(-5).join(", ")}.
-Jawab JSON saja:
+Jawab JSON saja, tanpa teks lain:
 {"signal":"BUY|SELL|WAIT","confidence":"HIGH|MEDIUM|LOW","trend":"...","support":0,"resistance":0,"sl_pips":50,"tp_pips":100,"summary":"..."}`;
   try {
     const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -212,16 +234,29 @@ Jawab JSON saja:
       body: JSON.stringify({
         model:"llama-3.3-70b-versatile", max_tokens:400,
         messages:[
-          {role:"system",content:"Jawab hanya JSON valid, tanpa markdown."},
+          {role:"system",content:"Jawab HANYA JSON valid satu baris. Jangan ada teks lain selain JSON."},
           {role:"user",content:prompt}
         ]
       })
     });
-    const data = await res.json();
-    const text = data.choices?.[0]?.message?.content||"{}";
-    return JSON.parse(text.replace(/```json|```/g,"").trim());
-  } catch {
-    return {signal:"WAIT",confidence:"LOW",trend:"—",sl_pips:50,tp_pips:100,summary:"Error"};
+    // ── HTTP-level error (401 invalid key, 429 rate limit, etc.) ──
+    if (!res.ok) {
+      const errBody = await res.json().catch(()=>({}));
+      const errMsg  = errBody?.error?.message || `HTTP ${res.status}`;
+      return safeAIResult({}, errMsg);
+    }
+    const data  = await res.json();
+    const raw   = data.choices?.[0]?.message?.content || "";
+    if (!raw) return safeAIResult({}, "empty response");
+    // Strip markdown fences if model adds them
+    const clean = raw.replace(/```json|```/gi,"").trim();
+    // Extract first JSON object from response (model sometimes adds commentary)
+    const match = clean.match(/\{[\s\S]*\}/);
+    if (!match) return safeAIResult({}, `no JSON in: ${clean.slice(0,60)}`);
+    const parsed = JSON.parse(match[0]);
+    return safeAIResult(parsed);
+  } catch(e) {
+    return safeAIResult({}, e.message);
   }
 }
 
@@ -822,8 +857,8 @@ export default function App() {
   // ── Fix #2: refs so runAutoCheck always reads fresh data ──
   const candlesRef     = useRef({});   // mirrors candles state
   const ticksRef       = useRef({});   // mirrors ticks state
-  // ── Fix #1: dedup H1 trigger WITHOUT putting side-effects in setState ──
-  const triggeredRef   = useRef({});   // { symbol: "candleKey" }
+  // ── Fix #1: dedup trigger WITHOUT setState side-effects — pakai Set ──
+  const triggeredRef   = useRef(new Set()); // Set<candleKey-symbol>
   // ── Scan & SL/TP refs ──
   const autoTFRef      = useRef("M5");
   const autoSLMultRef  = useRef("1.0");
@@ -961,8 +996,11 @@ export default function App() {
 
       const candleKey = `${now.getFullYear()}-${now.getMonth()}-${now.getDate()}-${tf}-${hour}-${mins}`;
       autoPairsRef.current.forEach(sym => {
-        if (triggeredRef.current[sym] === candleKey) return; // already fired this bar
-        triggeredRef.current = {...triggeredRef.current, [sym]: candleKey};
+        const key = `${candleKey}::${sym}`;
+        if (triggeredRef.current.has(key)) return;   // atomic Set check — no race condition
+        triggeredRef.current.add(key);               // mark before async call
+        // Prune old keys to prevent memory leak (keep only current bar's keys)
+        if (triggeredRef.current.size > 200) triggeredRef.current.clear();
         runAutoCheck(sym);
       });
     }, 5000); // poll every 5s — safe with key guard
@@ -993,9 +1031,15 @@ export default function App() {
       const result = await callGroqAI(symbol, tfCandles, curTick, tf);
       addAutoLog(
         symbol,"SIG",
-        `${symbol} → ${result.signal} (${result.confidence}) | ${result.trend||""} | ${result.summary||""}`,
+        `${symbol} → ${result.signal} (${result.confidence}) | ${result.trend}${result.summary&&result.summary!==result.trend?" | "+result.summary:""}`,
         result.signal!=="WAIT"?true:null
       );
+
+      // ── Tampilkan error API di log jika trend mengandung "ERR:" ──
+      if (result.trend?.startsWith("ERR:") || result.summary?.startsWith("ERR:")) {
+        addAutoLog(symbol,"ERROR",`API: ${result.summary||result.trend}`,false);
+        return;
+      }
 
       // ── Confidence filter (user-configurable) ──
       const minConf = autoMinConfRef.current;
@@ -1013,23 +1057,50 @@ export default function App() {
       const pip = {XAUUSD:0.1,XAGUSD:0.01,USOIL:0.01,UKOIL:0.01,USTEC:1,US30:1,US500:0.1,BTCUSD:1,ETHUSD:0.1}[symbol]||0.0001;
       const lot  = parseFloat(autoLotRef.current)||0.01;
       const cfg  = getDefaultSLTP(symbol);
+      const dig  = DIGITS[symbol] || 5;
 
       // Apply SL multiplier to AI suggestion, then add buffer
       const aiSLBase = result.sl_pips > 0 ? Math.round(result.sl_pips * slMult) : 0;
       const slInfo   = calcFinalSL(symbol, aiSLBase);
       const finalSL  = slInfo.total;
-      const rawTP    = result.tp_pips > 0 ? result.tp_pips : cfg.tp;
-      const finalTP  = Math.round(rawTP * tpMult);
-      const rr       = (finalTP/finalSL).toFixed(2);
+
+      // TP: AI value × mult, OR default × mult — tapi minimal 1.0× finalSL (R:R ≥ 1:1)
+      const rawTP   = result.tp_pips > 0 ? result.tp_pips : cfg.tp;
+      const finalTP = Math.max(Math.round(rawTP * tpMult), finalSL); // never let TP < SL
+
+      const rr = (finalTP / finalSL).toFixed(2);
+
+      // ── Konversi pip distance → harga absolut (sesuai ekspektasi MT5 bridge) ──
+      const ask = curTick.ask || 0;
+      const bid = curTick.bid || 0;
+
+      let slPrice, tpPrice;
+      if (result.signal === "BUY") {
+        slPrice = ask > 0 ? +(ask - finalSL * pip).toFixed(dig) : 0;
+        tpPrice = ask > 0 ? +(ask + finalTP * pip).toFixed(dig) : 0;
+      } else {
+        slPrice = bid > 0 ? +(bid + finalSL * pip).toFixed(dig) : 0;
+        tpPrice = bid > 0 ? +(bid - finalTP * pip).toFixed(dig) : 0;
+      }
+
+      // Validasi harga: SL/TP harus masuk akal
+      const slOk = result.signal==="BUY" ? slPrice < ask : slPrice > bid;
+      const tpOk = result.signal==="BUY" ? tpPrice > ask : tpPrice < bid;
+      if (!slOk || !tpOk || slPrice <= 0 || tpPrice <= 0) {
+        addAutoLog(symbol,"ERROR",
+          `${symbol}: SL/TP invalid — SL=${slPrice} TP=${tpPrice} ask=${ask} bid=${bid}`,false);
+        return;
+      }
 
       addAutoLog(symbol,"SL/TP",
-        `SL=${slInfo.base}p×${slMult}+buf${slInfo.buf}p=${finalSL}p | TP=${finalTP}p×${tpMult} | R:R 1:${rr} [${slInfo.source}]`,null);
+        `SL=${slInfo.base}p×${slMult}+buf${slInfo.buf}p=${finalSL}p→${slPrice} | TP=${finalTP}p→${tpPrice} | R:R 1:${rr}`,null);
 
       wsRef.current.send(JSON.stringify({
         type:"send_order", symbol, action:result.signal,
-        volume:lot, sl:finalSL*pip, tp:finalTP*pip,
+        volume:lot, sl:slPrice, tp:tpPrice,
       }));
-      addAutoLog(symbol,"ORDER",`🚀 ${result.signal} ${lot}L ${symbol} | SL:${finalSL}p TP:${finalTP}p | R:R 1:${rr}`,null);
+      addAutoLog(symbol,"ORDER",
+        `🚀 ${result.signal} ${lot}L ${symbol} | SL:${slPrice} TP:${tpPrice} | R:R 1:${rr}`,null);
 
       setAutoStatus(prev=>({...prev,[symbol]:{lastAction:result.signal,lastTime:new Date().toLocaleTimeString("id-ID"),tf}}));
     } catch(err) {
