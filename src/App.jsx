@@ -293,6 +293,207 @@ function MainChart({ data, symbol }) {
   );
 }
 
+function CandleChart({ data, symbol }) {
+  const containerRef = useRef(null);
+  const [contW, setContW] = useState(600);
+  const [hoverIdx, setHoverIdx] = useState(null);
+
+  useEffect(() => {
+    if (!containerRef.current) return;
+    const ro = new ResizeObserver(entries => {
+      if (entries[0]) setContW(entries[0].contentRect.width);
+    });
+    ro.observe(containerRef.current);
+    return () => ro.disconnect();
+  }, []);
+
+  if (!data || data.length < 2) return (
+    <div ref={containerRef} style={{height:232,display:"flex",alignItems:"center",
+      justifyContent:"center",color:"#122a1c",fontFamily:"monospace",fontSize:11,letterSpacing:3}}>
+      ── NO DATA STREAM ──
+    </div>
+  );
+
+  const H = 232;
+  const padL = 68, padR = 10, padT = 12, padB = 22;
+  const volH = 28, volGap = 5;
+  const priceH = H - padT - padB - volH - volGap;
+
+  // Candle sizing
+  const chartW = Math.max(1, contW - padL - padR);
+  const candleW = Math.max(3, Math.min(14, Math.floor(chartW / 55)));
+  const gap = Math.max(1, Math.floor(candleW * 0.18));
+  const colW = candleW + gap;
+  const maxCandles = Math.max(1, Math.floor(chartW / colW));
+  const visible = data.slice(-maxCandles);
+  const n = visible.length;
+  if (n === 0) return null;
+
+  // Price range
+  const maxP = Math.max(...visible.map(c => c.high));
+  const minP = Math.min(...visible.map(c => c.low));
+  const priceRange = maxP - minP || 0.001;
+  const pPad = priceRange * 0.09;
+  const pMin = minP - pPad, pMax = maxP + pPad;
+  const pRange = pMax - pMin;
+
+  // Volume range
+  const maxVol = Math.max(1, ...visible.map(c => c.volume || 0));
+
+  const toY   = p => padT + priceH - ((p - pMin) / pRange) * priceH;
+  const toX   = i => padL + i * colW;
+  const toVolH = v => ((v || 0) / maxVol) * volH;
+
+  // Y-axis ticks (5 levels)
+  const d = DIGITS[symbol] || 5;
+  const yTicks = Array.from({ length: 5 }, (_, i) => pMin + (i / 4) * pRange);
+  const xTickInterval = Math.max(1, Math.floor(n / 5));
+
+  const handleMouseMove = e => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const mouseX = e.clientX - rect.left - padL;
+    const idx = Math.floor(mouseX / colW);
+    setHoverIdx(idx >= 0 && idx < n ? idx : null);
+  };
+
+  const hovered = hoverIdx !== null ? visible[hoverIdx] : null;
+  const lastC   = visible[n - 1];
+  const lastBull = lastC ? lastC.close >= lastC.open : true;
+
+  return (
+    <div ref={containerRef} style={{ width:"100%", position:"relative" }}>
+      <svg
+        width={contW} height={H}
+        style={{ display:"block", cursor:"crosshair" }}
+        onMouseMove={handleMouseMove}
+        onMouseLeave={() => setHoverIdx(null)}
+      >
+        {/* ── Axes border ── */}
+        <line x1={padL} y1={padT} x2={padL} y2={H - padB}
+          stroke="#0c2618" strokeWidth={1} />
+        <line x1={padL} y1={H - padB} x2={contW - padR} y2={H - padB}
+          stroke="#0c2618" strokeWidth={1} />
+
+        {/* ── Price grid lines & Y labels ── */}
+        {yTicks.map((price, i) => (
+          <g key={i}>
+            <line x1={padL} y1={toY(price)} x2={contW - padR} y2={toY(price)}
+              stroke="#060f09" strokeWidth={1} />
+            <text x={padL - 4} y={toY(price) + 3} textAnchor="end"
+              fill="#1a4030" fontSize={7} fontFamily="monospace">
+              {price.toFixed(d)}
+            </text>
+          </g>
+        ))}
+
+        {/* ── Vol separator ── */}
+        <line x1={padL} y1={H - padB - volH - volGap + 2} x2={contW - padR}
+          y2={H - padB - volH - volGap + 2}
+          stroke="#060f09" strokeWidth={1} strokeDasharray="3,4" />
+        <text x={padL - 4} y={H - padB - volH / 2 + 3} textAnchor="end"
+          fill="#0c2618" fontSize={6} fontFamily="monospace">VOL</text>
+
+        {/* ── Candles ── */}
+        {visible.map((c, i) => {
+          const bull = c.close >= c.open;
+          const color    = bull ? "#00ff41" : "#ff1f4b";
+          const fillCol  = bull ? "#00ff4160" : "#ff1f4baa";
+          const x        = toX(i);
+          const cx       = x + candleW / 2;
+          const bodyTop  = Math.min(toY(c.open), toY(c.close));
+          const bodyBot  = Math.max(toY(c.open), toY(c.close));
+          const bodyH    = Math.max(1.5, bodyBot - bodyTop);
+          const vH       = toVolH(c.volume);
+          const vY       = H - padB - vH;
+
+          return (
+            <g key={i}>
+              {/* Volume bar */}
+              <rect x={x} y={vY} width={candleW} height={vH}
+                fill={bull ? "#00ff4118" : "#ff1f4b18"} />
+              {/* High wick */}
+              <line x1={cx} y1={toY(c.high)} x2={cx} y2={bodyTop}
+                stroke={color} strokeWidth={0.8} />
+              {/* Low wick */}
+              <line x1={cx} y1={bodyBot} x2={cx} y2={toY(c.low)}
+                stroke={color} strokeWidth={0.8} />
+              {/* Body */}
+              <rect x={x} y={bodyTop} width={candleW} height={bodyH}
+                fill={fillCol} stroke={color} strokeWidth={0.7} />
+            </g>
+          );
+        })}
+
+        {/* ── X-axis time labels ── */}
+        {visible.map((c, i) => {
+          if (i % xTickInterval !== 0 && i !== n - 1) return null;
+          return (
+            <text key={i} x={toX(i) + candleW / 2} y={H - padB + 13}
+              textAnchor="middle" fill="#1a4030" fontSize={7} fontFamily="monospace">
+              {c.time?.slice(11, 16) || ""}
+            </text>
+          );
+        })}
+
+        {/* ── Last price line ── */}
+        {lastC && (
+          <g>
+            <line x1={padL} y1={toY(lastC.close)} x2={contW - padR} y2={toY(lastC.close)}
+              stroke={lastBull ? "#00ff4144" : "#ff1f4b44"} strokeWidth={0.8} strokeDasharray="4,3" />
+            <rect x={contW - padR} y={toY(lastC.close) - 7} width={padR + 1} height={14}
+              fill={lastBull ? "#00ff41" : "#ff1f4b"} />
+            <text x={contW - padR + 1} y={toY(lastC.close) + 3}
+              fill="#000" fontSize={6} fontFamily="monospace" fontWeight="bold">
+              ▶
+            </text>
+          </g>
+        )}
+
+        {/* ── Crosshair + OHLC tooltip ── */}
+        {hovered && hoverIdx !== null && (() => {
+          const bull  = hovered.close >= hovered.open;
+          const color = bull ? "#00ff41" : "#ff1f4b";
+          const cx    = toX(hoverIdx) + candleW / 2;
+          const tipW  = 128, tipH = 84;
+          const tipX  = hoverIdx > n * 0.62 ? cx - tipW - 8 : cx + 8;
+          const tipY  = padT;
+
+          return (
+            <g>
+              {/* Vertical line */}
+              <line x1={cx} y1={padT} x2={cx} y2={H - padB}
+                stroke={color} strokeWidth={0.6} strokeDasharray="3,3" opacity={0.55} />
+              {/* Horizontal price line */}
+              <line x1={padL} y1={toY(hovered.close)} x2={contW - padR} y2={toY(hovered.close)}
+                stroke={color} strokeWidth={0.4} strokeDasharray="2,4" opacity={0.4} />
+              {/* Tooltip bg */}
+              <rect x={tipX} y={tipY} width={tipW} height={tipH} rx={2}
+                fill="#000e08" stroke={color} strokeWidth={0.8} opacity={0.97} />
+              {/* Tooltip rows */}
+              {[
+                ["TIME",  hovered.time?.slice(11,16)||"",              "#2a5038"],
+                ["OPEN",  hovered.open?.toFixed(d),                    color],
+                ["HIGH",  hovered.high?.toFixed(d),                    "#00ff41"],
+                ["LOW",   hovered.low?.toFixed(d),                     "#ff1f4b"],
+                ["CLOSE", hovered.close?.toFixed(d),                   color],
+                ["VOL",   (hovered.volume||0).toLocaleString(),        "#1a4030"],
+              ].map(([k, v, c], ii) => (
+                <g key={k}>
+                  <text x={tipX + 6} y={tipY + 12 + ii * 12}
+                    fill="#1a4030" fontSize={7} fontFamily="monospace">{k}</text>
+                  <text x={tipX + tipW - 5} y={tipY + 12 + ii * 12}
+                    textAnchor="end" fill={c} fontSize={7}
+                    fontFamily="monospace" fontWeight="bold">{v}</text>
+                </g>
+              ))}
+            </g>
+          );
+        })()}
+      </svg>
+    </div>
+  );
+}
+
 function SignalBadge({ signal, confidence }) {
   const cfg = {
     BUY:  { bg:"#001808", border:"#00ff41", text:"#00ff41", label:"▲ BUY",  glow:"0 0 10px #00ff4144" },
@@ -593,6 +794,7 @@ export default function App() {
   const [group, setGroup]         = useState("FX");
   const [orderResult, setOrderResult] = useState(null);
   const [clock, setClock]         = useState(new Date());
+  const [chartType, setChartType] = useState("line"); // "line" | "candle"
 
   // ── AUTO TRADING ──
   const [autoEnabled, setAutoEnabled]       = useState(false);
@@ -1086,15 +1288,37 @@ export default function App() {
             <>
               {/* Price chart */}
               <div className="cyber-panel" style={{padding:"8px 6px",position:"relative"}}>
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 6px",marginBottom:4}}>
+                {/* Chart header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"0 6px",marginBottom:6}}>
                   <span style={{color:"#1a4030",fontSize:7,letterSpacing:2}}>
                     ◈ PRICE ACTION // {selected} // {timeframe}
                   </span>
-                  <span style={{color:"#0c2618",fontSize:7,letterSpacing:1,animation:"blink 1.5s infinite"}}>
-                    ● LIVE
-                  </span>
+                  <div style={{display:"flex",alignItems:"center",gap:6}}>
+                    {/* Chart type toggle */}
+                    {[
+                      {id:"line",   label:"LINE",   icon:"∿"},
+                      {id:"candle", label:"CANDLE", icon:"▐"},
+                    ].map(({id,label,icon})=>(
+                      <button key={id} onClick={()=>setChartType(id)} style={{
+                        background:chartType===id?"#001808":"transparent",
+                        border:`1px solid ${chartType===id?"#00ff41":"#0c2618"}`,
+                        color:chartType===id?"#00ff41":"#1a4030",
+                        padding:"2px 8px",borderRadius:2,cursor:"pointer",
+                        fontFamily:"monospace",fontSize:7,letterSpacing:1,
+                        boxShadow:chartType===id?"0 0 7px #00ff4133":"none",
+                        transition:"all 0.1s",
+                      }}>{icon} {label}</button>
+                    ))}
+                    <span style={{color:"#0c2618",fontSize:7,letterSpacing:1,animation:"blink 1.5s infinite",marginLeft:4}}>
+                      ● LIVE
+                    </span>
+                  </div>
                 </div>
-                <MainChart data={candles[selected]} symbol={selected}/>
+                {/* Conditional chart render */}
+                {chartType === "line"
+                  ? <MainChart data={candles[selected]} symbol={selected}/>
+                  : <CandleChart data={candles[selected]} symbol={selected}/>
+                }
               </div>
 
               {/* AI Analysis */}
