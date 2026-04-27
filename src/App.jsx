@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 // ─── GROQ API KEY — Ganti dengan key kamu dari console.groq.com ───
-const GROQ_API_KEY = "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";
+const GROQ_API_KEY = "GANTI_DENGAN_GROQ_API_KEY_KAMU";
 
 const PAIRS = [
   "EURUSD","GBPUSD","USDJPY","AUDUSD","USDCHF","USDCAD","NZDUSD",
@@ -67,51 +67,68 @@ const SPR_MAP = {
 
 // ─── Default SL/TP per instrument (fallback jika AI tidak return nilai) ───
 // Nilai dalam PIPS sesuai karakteristik volatilitas masing-masing instrument
+// ─── SL/TP default + buffer anti-SL-hunter per instrument ───
+// sl   = SL base dari AI atau default (pips)
+// tp   = TP target (pips)
+// buf  = buffer tambahan di luar SL (pips) — untuk hindari spike/SL hunter
+// SL final yang dikirim ke MT5 = sl + buf
 const DEFAULT_SLTP = {
-  // FX Major — volatilitas rendah-sedang
-  EURUSD:{sl:30,  tp:60,  desc:"30/60p"},
-  GBPUSD:{sl:40,  tp:80,  desc:"40/80p"},
-  USDJPY:{sl:30,  tp:60,  desc:"30/60p"},
-  AUDUSD:{sl:30,  tp:60,  desc:"30/60p"},
-  USDCHF:{sl:30,  tp:60,  desc:"30/60p"},
-  USDCAD:{sl:30,  tp:60,  desc:"30/60p"},
-  NZDUSD:{sl:30,  tp:60,  desc:"30/60p"},
-  // FX Cross — volatilitas sedang
-  EURGBP:{sl:25,  tp:50,  desc:"25/50p"},
-  EURJPY:{sl:40,  tp:80,  desc:"40/80p"},
-  EURCAD:{sl:35,  tp:70,  desc:"35/70p"},
-  EURAUD:{sl:40,  tp:80,  desc:"40/80p"},
-  EURNZD:{sl:40,  tp:80,  desc:"40/80p"},
-  EURCHF:{sl:25,  tp:50,  desc:"25/50p"},
-  GBPJPY:{sl:60,  tp:120, desc:"60/120p"},
-  GBPAUD:{sl:55,  tp:110, desc:"55/110p"},
-  GBPCAD:{sl:50,  tp:100, desc:"50/100p"},
-  GBPCHF:{sl:40,  tp:80,  desc:"40/80p"},
-  GBPNZD:{sl:55,  tp:110, desc:"55/110p"},
-  AUDJPY:{sl:35,  tp:70,  desc:"35/70p"},
-  AUDCAD:{sl:30,  tp:60,  desc:"30/60p"},
-  AUDCHF:{sl:30,  tp:60,  desc:"30/60p"},
-  AUDNZD:{sl:30,  tp:60,  desc:"30/60p"},
-  CADJPY:{sl:35,  tp:70,  desc:"35/70p"},
-  CHFJPY:{sl:35,  tp:70,  desc:"35/70p"},
-  NZDJPY:{sl:35,  tp:70,  desc:"35/70p"},
-  // Metals — volatilitas tinggi
-  XAUUSD:{sl:200, tp:400, desc:"200/400p"},
-  XAGUSD:{sl:150, tp:300, desc:"150/300p"},
-  // Energy — volatilitas tinggi
-  USOIL: {sl:100, tp:200, desc:"100/200p"},
-  UKOIL: {sl:100, tp:200, desc:"100/200p"},
-  // Indices — volatilitas sangat tinggi
-  USTEC: {sl:150, tp:300, desc:"150/300p"},
-  US30:  {sl:200, tp:400, desc:"200/400p"},
-  US500: {sl:120, tp:240, desc:"120/240p"},
-  // Crypto — volatilitas ekstrem
-  BTCUSD:{sl:800, tp:1600,desc:"800/1600p"},
-  ETHUSD:{sl:400, tp:800, desc:"400/800p"},
+  // FX Major — spread rendah, buffer 5-8p
+  EURUSD:{sl:30,  tp:60,  buf:6,   desc:"30+6p / 60p"},
+  GBPUSD:{sl:40,  tp:80,  buf:8,   desc:"40+8p / 80p"},
+  USDJPY:{sl:30,  tp:60,  buf:6,   desc:"30+6p / 60p"},
+  AUDUSD:{sl:30,  tp:60,  buf:6,   desc:"30+6p / 60p"},
+  USDCHF:{sl:30,  tp:60,  buf:6,   desc:"30+6p / 60p"},
+  USDCAD:{sl:30,  tp:60,  buf:6,   desc:"30+6p / 60p"},
+  NZDUSD:{sl:30,  tp:60,  buf:6,   desc:"30+6p / 60p"},
+  // FX Cross — spread lebih lebar, buffer 8-15p
+  EURGBP:{sl:25,  tp:50,  buf:8,   desc:"25+8p / 50p"},
+  EURJPY:{sl:40,  tp:80,  buf:10,  desc:"40+10p / 80p"},
+  EURCAD:{sl:35,  tp:70,  buf:10,  desc:"35+10p / 70p"},
+  EURAUD:{sl:40,  tp:80,  buf:10,  desc:"40+10p / 80p"},
+  EURNZD:{sl:40,  tp:80,  buf:10,  desc:"40+10p / 80p"},
+  EURCHF:{sl:25,  tp:50,  buf:8,   desc:"25+8p / 50p"},
+  GBPJPY:{sl:60,  tp:120, buf:15,  desc:"60+15p / 120p"},
+  GBPAUD:{sl:55,  tp:110, buf:12,  desc:"55+12p / 110p"},
+  GBPCAD:{sl:50,  tp:100, buf:12,  desc:"50+12p / 100p"},
+  GBPCHF:{sl:40,  tp:80,  buf:10,  desc:"40+10p / 80p"},
+  GBPNZD:{sl:55,  tp:110, buf:12,  desc:"55+12p / 110p"},
+  AUDJPY:{sl:35,  tp:70,  buf:10,  desc:"35+10p / 70p"},
+  AUDCAD:{sl:30,  tp:60,  buf:8,   desc:"30+8p / 60p"},
+  AUDCHF:{sl:30,  tp:60,  buf:8,   desc:"30+8p / 60p"},
+  AUDNZD:{sl:30,  tp:60,  buf:8,   desc:"30+8p / 60p"},
+  CADJPY:{sl:35,  tp:70,  buf:10,  desc:"35+10p / 70p"},
+  CHFJPY:{sl:35,  tp:70,  buf:10,  desc:"35+10p / 70p"},
+  NZDJPY:{sl:35,  tp:70,  buf:10,  desc:"35+10p / 70p"},
+  // Metals — noise tinggi, buffer 50-80p
+  XAUUSD:{sl:200, tp:400, buf:60,  desc:"200+60p / 400p"},
+  XAGUSD:{sl:150, tp:300, buf:40,  desc:"150+40p / 300p"},
+  // Energy — spike sering, buffer 20-30p
+  USOIL: {sl:100, tp:200, buf:25,  desc:"100+25p / 200p"},
+  UKOIL: {sl:100, tp:200, buf:25,  desc:"100+25p / 200p"},
+  // Indices — volatile, buffer 30-50p
+  USTEC: {sl:150, tp:300, buf:40,  desc:"150+40p / 300p"},
+  US30:  {sl:200, tp:400, buf:50,  desc:"200+50p / 400p"},
+  US500: {sl:120, tp:240, buf:35,  desc:"120+35p / 240p"},
+  // Crypto — ekstrem, buffer 200-300p
+  BTCUSD:{sl:800, tp:1600,buf:250, desc:"800+250p / 1600p"},
+  ETHUSD:{sl:400, tp:800, buf:150, desc:"400+150p / 800p"},
 };
-// Helper: get SL/TP fallback for a symbol
+
+// Helper: get config for a symbol (with last-resort fallback)
 function getDefaultSLTP(symbol) {
-  return DEFAULT_SLTP[symbol] || {sl:50, tp:100, desc:"50/100p"};
+  return DEFAULT_SLTP[symbol] || {sl:50, tp:100, buf:10, desc:"50+10p / 100p"};
+}
+
+// Helper: calculate final SL with buffer
+// If AI gives sl_pips, use that as base + symbol buffer
+// If AI gives nothing, use table default + buffer
+function calcFinalSL(symbol, aiSL) {
+  const cfg = getDefaultSLTP(symbol);
+  const base = (aiSL > 0) ? aiSL : cfg.sl;
+  const total = base + cfg.buf;
+  const source = aiSL > 0 ? "AI" : "default";
+  return { total, base, buf: cfg.buf, source };
 }
 
 function getVol(s){ return VOL_MAP[s]||0.0007; }
@@ -732,92 +749,62 @@ export default function App() {
       return;
     }
 
-    addAutoLog(symbol, "SCAN", `H1 candle close — memulai scan ${symbol}`, null);
+    addAutoLog(symbol, "SCAN", `H1 candle close — scan ${symbol}`, null);
 
     try {
-      // ── Guard 1: Cek posisi terbuka ──
+      // ── Guard: Cek posisi terbuka ──
       const hasPosition = positionsRef.current.some(p => p.symbol === symbol);
       if (hasPosition) {
-        addAutoLog(symbol, "SKIP", `${symbol}: posisi sudah ada, tunggu close dulu`, null);
+        addAutoLog(symbol, "SKIP", `${symbol}: posisi sudah ada, skip`, null);
         return;
       }
 
-      // ── Step 1: Fetch candles H1, H4, D1 ──
-      addAutoLog(symbol, "FETCH", `${symbol}: mengambil data H1, H4, D1...`, null);
-      for (const tf of ["H1","H4","D1"]) {
-        wsRef.current.send(JSON.stringify({type:"get_candles", symbol, timeframe:tf, count:100}));
-      }
-      await new Promise(r=>setTimeout(r,3000)); // wait for bridge to respond
+      // ── Step 1: Fetch candles H1 ──
+      wsRef.current.send(JSON.stringify({type:"get_candles", symbol, timeframe:"H1", count:100}));
+      await new Promise(r=>setTimeout(r,2000));
 
-      // ── Step 2: Analyze H1 (primary — must be HIGH) ──
+      // ── Step 2: Analisis AI H1 ──
       addAutoLog(symbol, "AI", `${symbol}: analisis H1...`, null);
-      const h1Result = await callGroqAI(symbol, [], {}, "H1");
+      const result = await callGroqAI(symbol, [], {}, "H1");
+
       addAutoLog(symbol, "H1",
-        `${symbol} H1 → ${h1Result.signal} (${h1Result.confidence}) | ${h1Result.trend||""}`,
-        h1Result.signal !== "WAIT" && h1Result.confidence === "HIGH" ? true : null
+        `${symbol} → ${result.signal} (${result.confidence}) | ${result.trend||""} | ${result.summary||""}`,
+        result.signal !== "WAIT" ? true : null
       );
 
-      if (h1Result.signal === "WAIT" || h1Result.confidence !== "HIGH") {
-        addAutoLog(symbol, "SKIP", `${symbol}: H1 tidak memenuhi syarat — butuh HIGH confidence`, null);
+      // ── Step 3: Skip hanya kalau WAIT ──
+      if (result.signal === "WAIT") {
+        addAutoLog(symbol, "SKIP", `${symbol}: AI signal WAIT, tidak ada order`, null);
         return;
       }
 
-      // ── Step 3: Confirm H4 ──
-      addAutoLog(symbol, "AI", `${symbol}: konfirmasi H4...`, null);
-      const h4Result = await callGroqAI(symbol, [], {}, "H4");
-      addAutoLog(symbol, "H4", `${symbol} H4 → ${h4Result.signal}`, null);
-
-      // ── Step 4: Confirm D1 (big picture) ──
-      addAutoLog(symbol, "AI", `${symbol}: konfirmasi D1...`, null);
-      const d1Result = await callGroqAI(symbol, [], {}, "D1");
-      addAutoLog(symbol, "D1", `${symbol} D1 → ${d1Result.signal}`, null);
-
-      // ── Step 5: MTF Consensus (min 2 dari 3 harus setuju) ──
-      const signals = [h1Result.signal, h4Result.signal, d1Result.signal];
-      const buyCount  = signals.filter(s=>s==="BUY").length;
-      const sellCount = signals.filter(s=>s==="SELL").length;
-      const consensus = buyCount >= 2 ? "BUY" : sellCount >= 2 ? "SELL" : "WAIT";
-
-      addAutoLog(symbol, "MTF",
-        `${symbol}: H1:${signals[0]} H4:${signals[1]} D1:${signals[2]} → ${consensus}`,
-        consensus !== "WAIT"
-      );
-
-      if (consensus === "WAIT") {
-        addAutoLog(symbol, "SKIP", `${symbol}: MTF tidak konsensus, tidak ada order`, null);
-        return;
-      }
-
-      // ── Step 6: Calculate SL/TP ──
+      // ── Step 4: Hitung SL/TP + buffer ──
       const pip = {XAUUSD:0.1,XAGUSD:0.01,USOIL:0.01,UKOIL:0.01,USTEC:1,US30:1,US500:0.1,BTCUSD:1,ETHUSD:0.1}[symbol]||0.0001;
       const lot = parseFloat(autoLotRef.current) || 0.01;
+      const cfg = getDefaultSLTP(symbol);
 
-      // Priority: 1) AI result  2) Per-symbol default  3) Last resort 50/100
-      const symDefault = getDefaultSLTP(symbol);
-      const finalSL = (h1Result.sl_pips > 0)
-        ? h1Result.sl_pips
-        : symDefault.sl;
-      const finalTP = (h1Result.tp_pips > 0)
-        ? h1Result.tp_pips
-        : symDefault.tp;
+      const slInfo  = calcFinalSL(symbol, result.sl_pips || 0);
+      const finalSL = slInfo.total;
+      const finalTP = (result.tp_pips > 0) ? result.tp_pips : cfg.tp;
+      const rr = (finalTP / finalSL).toFixed(2);
 
-      const slSource = h1Result.sl_pips > 0 ? "AI" : "default";
       addAutoLog(symbol, "SL/TP",
-        `${symbol}: SL=${finalSL}p TP=${finalTP}p (sumber: ${slSource})`, null
+        `SL=${slInfo.base}p+buf${slInfo.buf}p=${finalSL}p | TP=${finalTP}p | R:R 1:${rr} [${slInfo.source}]`,
+        null
       );
 
-      // ── Step 7: Fire order ──
+      // ── Step 5: Fire order ──
       wsRef.current.send(JSON.stringify({
         type:   "send_order",
         symbol,
-        action: consensus,
+        action: result.signal,
         volume: lot,
         sl:     finalSL * pip,
         tp:     finalTP * pip,
       }));
 
       addAutoLog(symbol, "ORDER",
-        `🚀 ${consensus} ${lot} lot ${symbol} | SL:${finalSL}p TP:${finalTP}p`,
+        `🚀 ${result.signal} ${lot} lot ${symbol} | SL:${finalSL}p TP:${finalTP}p | R:R 1:${rr}`,
         null
       );
 
@@ -830,7 +817,7 @@ export default function App() {
     const next = !autoEnabled;
     setAutoEnabled(next);
     if (next) {
-      addAutoLog("SYSTEM", "START", `Auto trading dimulai — ${autoPairs.length} pairs aktif | Trigger: H1 candle close | Analisis: H1+H4+D1`, true);
+      addAutoLog("SYSTEM", "START", `Auto trading dimulai — ${autoPairs.length} pairs aktif | H1 candle close | Entry: BUY/SELL langsung`, true);
     } else {
       addAutoLog("SYSTEM", "STOP", "Auto trading dihentikan", null);
     }
@@ -1039,7 +1026,7 @@ export default function App() {
                   <div>
                     <div style={{color:"#e2e8f0",fontSize:13,fontWeight:700,letterSpacing:1}}>🤖 AUTO TRADING ENGINE</div>
                     <div style={{color:"#475569",fontSize:10,marginTop:2}}>
-                      Trigger: H1 candle close · Analisis: H1 (utama) + H4 + D1 · Kondisi: HIGH confidence + MTF consensus · Max: 1 posisi/pair
+                      Trigger: H1 candle close · Analisis: H1 · Entry: BUY/SELL (skip hanya jika WAIT) · Max: 1 posisi/pair
                     </div>
                   </div>
                   <button
@@ -1068,12 +1055,12 @@ export default function App() {
                   <div style={{background:"#0a1628",border:"1px solid #1e293b",borderRadius:4,padding:"6px 10px"}}>
                     <div style={{color:"#475569",fontSize:8,fontFamily:"monospace",letterSpacing:1,marginBottom:4}}>SL/TP — OTOMATIS PER INSTRUMENT</div>
                     <div style={{color:"#334155",fontSize:8,fontFamily:"monospace",lineHeight:1.8}}>
-                      AI akan tentukan SL/TP dari analisis.
-                      Jika AI tidak return nilai, sistem pakai default per instrument:
-                      <span style={{color:"#4ade80"}}> FX 30/60p</span> ·
-                      <span style={{color:"#fb923c"}}> XAU 200/400p</span> ·
-                      <span style={{color:"#f87171"}}> BTC 800/1600p</span> ·
-                      <span style={{color:"#a78bfa"}}> OIL 100/200p</span>
+                      AI tentukan SL/TP. Buffer anti-SL-hunter ditambah otomatis ke setiap SL.
+                      <br/>Default fallback+buffer:
+                      <span style={{color:"#4ade80"}}> FX 30+6p</span> ·
+                      <span style={{color:"#fb923c"}}> XAU 200+60p</span> ·
+                      <span style={{color:"#f87171"}}> BTC 800+250p</span> ·
+                      <span style={{color:"#a78bfa"}}> OIL 100+25p</span>
                     </div>
                   </div>
                 </div>
@@ -1114,7 +1101,7 @@ export default function App() {
                           <div key={sym} style={{position:"relative",display:"inline-block"}}>
                             <button
                               onClick={()=>!autoEnabled && toggleAutoPair(sym)}
-                              title={`SL: ${def.sl}p | TP: ${def.tp}p (fallback)`}
+                              title={`SL base: ${def.sl}p + buffer: ${def.buf}p = ${def.sl+def.buf}p total | TP: ${def.tp}p | R:R 1:${(def.tp/(def.sl+def.buf)).toFixed(1)}`}
                               style={{
                                 padding:"4px 8px",borderRadius:4,
                                 border:`1px solid ${isOn?"#1d4ed8":"#1e293b"}`,
@@ -1131,8 +1118,10 @@ export default function App() {
                               </span>}
                             </button>
                             {isOn && (
-                              <div style={{fontSize:7,color:"#334155",textAlign:"center",fontFamily:"monospace",lineHeight:1,marginTop:1}}>
-                                {def.desc}
+                              <div style={{fontSize:7,color:"#334155",textAlign:"center",fontFamily:"monospace",lineHeight:1.4,marginTop:1}}>
+                                <span style={{color:"#f87171"}}>SL {def.sl}+{def.buf}p</span>
+                                {" / "}
+                                <span style={{color:"#a78bfa"}}>TP {def.tp}p</span>
                               </div>
                             )}
                           </div>
