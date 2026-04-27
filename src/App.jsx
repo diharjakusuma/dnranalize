@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 
 // ─── GROQ API KEY — Ganti dengan key kamu dari console.groq.com ───
-const GROQ_API_KEY = "GANTI_DENGAN_GROQ_API_KEY_KAMU";
+const GROQ_API_KEY = "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";
 
 const PAIRS = [
   "EURUSD","GBPUSD","USDJPY","AUDUSD","USDCHF","USDCAD","NZDUSD",
@@ -861,340 +861,376 @@ export default function App() {
   const tick = ticks[selected];
   const d = DIGITS[selected] || 5;
 
-  const connected = wsStatus === "connected";
-  const stColor = {connected:"#39ff14",connecting:"#ffff00",disconnected:"#1a3a1a",error:"#ff0000"}[wsStatus];
-  const filteredPairs = GROUPS[group] || PAIRS;
-  const tick = ticks[selected];
-  const d = DIGITS[selected] || 5;
-
   return (
-    <div style={{background:"#000000",height:"100vh",overflow:"hidden",fontFamily:"'Share Tech Mono','Courier New',monospace",color:"#39ff14",display:"flex",flexDirection:"column",position:"relative"}}>
+    <div style={{
+      background:"#020408",
+      height:"100vh",
+      overflow:"hidden",
+      fontFamily:"'JetBrains Mono',monospace",
+      color:"#e0e0e0",
+      display:"flex",
+      flexDirection:"column",
+      position:"relative",
+    }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=VT323&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700;800&family=Orbitron:wght@400;700;900&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:3px}
-        ::-webkit-scrollbar-track{background:#000}
-        ::-webkit-scrollbar-thumb{background:#39ff1433}
-        @keyframes matrix-rain{0%{transform:translateY(-100%);opacity:1}100%{transform:translateY(100vh);opacity:0}}
-        @keyframes blink{0%,100%{opacity:1}49%{opacity:1}50%{opacity:0}}
-        @keyframes flicker{0%,100%{opacity:1}93%{opacity:.85}94%{opacity:1}97%{opacity:.9}98%{opacity:1}}
-        @keyframes scan{0%{top:-10%}100%{top:110%}}
-        @keyframes glitch{0%,100%{text-shadow:2px 0 #ff0000,-2px 0 #0000ff}25%{text-shadow:-2px 0 #ff0000,2px 0 #0000ff}50%{text-shadow:2px 2px #ff0000,-2px -2px #0000ff}75%{text-shadow:0 0 #ff0000,0 0 #0000ff}}
-        @keyframes type{from{width:0}to{width:100%}}
-        @keyframes fadeIn{from{opacity:0}to{opacity:1}}
-        @keyframes pulse-green{0%,100%{box-shadow:0 0 4px #39ff14}50%{box-shadow:0 0 16px #39ff14,0 0 30px #39ff1444}}
-        @keyframes scroll-up{0%{transform:translateY(0)}100%{transform:translateY(-50%)}}
-        .hack-row:hover{background:#39ff1408!important;color:#fff!important}
-        .hack-row.sel{background:#39ff1412!important;border-left:2px solid #39ff14!important}
-        .hack-btn{background:none;border:1px solid #39ff1433;color:#39ff1488;font-family:'Share Tech Mono',monospace;font-size:9px;padding:2px 8px;cursor:pointer;letter-spacing:1px;text-transform:uppercase}
-        .hack-btn:hover{border-color:#39ff14;color:#39ff14;background:#39ff1408}
-        .hack-btn.active{border-color:#39ff14;color:#39ff14;background:#39ff1410}
-        .hack-inp{background:#000;border:1px solid #39ff1433;color:#39ff14;font-family:'Share Tech Mono',monospace;font-size:11px;padding:5px 8px;width:100%;outline:none}
-        .hack-inp:focus{border-color:#39ff14;box-shadow:0 0 8px #39ff1433}
-        .tab{background:none;border:none;color:#1a5a1a;font-family:'Share Tech Mono',monospace;font-size:10px;padding:6px 14px;cursor:pointer;letter-spacing:2px;border-bottom:1px solid transparent}
-        .tab.on{color:#39ff14;border-bottom:1px solid #39ff14}
-        .tab:hover{color:#39ff1488}
-        .grp{background:none;border:none;color:#1a4a1a;font-family:'Share Tech Mono',monospace;font-size:8px;padding:4px 6px;cursor:pointer;letter-spacing:1px}
-        .grp.on{color:#39ff14;border-bottom:1px solid #39ff1466}
-        .buy-btn{width:100%;padding:10px;background:#001a00;border:1px solid #39ff1444;color:#39ff14;font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:2px;text-transform:uppercase}
-        .buy-btn:hover{background:#003300;border-color:#39ff14;box-shadow:0 0 12px #39ff1422}
-        .sell-btn{width:100%;padding:10px;background:#1a0000;border:1px solid #ff000044;color:#ff0000;font-family:'Share Tech Mono',monospace;font-size:11px;cursor:pointer;letter-spacing:2px;text-transform:uppercase}
-        .sell-btn:hover{background:#330000;border-color:#ff0000;box-shadow:0 0 12px #ff000022}
-        .tf{background:none;border:1px solid #1a3a1a;color:#1a5a1a;font-family:'Share Tech Mono',monospace;font-size:9px;padding:3px 7px;cursor:pointer;letter-spacing:1px}
-        .tf.on{border-color:#39ff1444;color:#39ff14;background:#39ff1408}
+        ::-webkit-scrollbar{width:2px;height:2px}
+        ::-webkit-scrollbar-track{background:transparent}
+        ::-webkit-scrollbar-thumb{background:#ffffff11;border-radius:1px}
+        input,select{outline:none!important}
+        button{transition:all .15s}
+        button:hover{opacity:.8}
+        @keyframes scanline{0%{transform:translateY(-100%)}100%{transform:translateY(100vh)}}
+        @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+        @keyframes flicker{0%,100%{opacity:1}92%{opacity:.95}94%{opacity:.8}96%{opacity:.95}}
+        @keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+        @keyframes glow{0%,100%{text-shadow:0 0 8px #00ff8888}50%{text-shadow:0 0 20px #00ff88cc,0 0 40px #00ff8844}}
+        @keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+        @keyframes fadeUp{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+        .pair-row:hover{background:#ffffff06!important}
+        .pair-row.active{background:#00ff8808!important;border-left:2px solid #00ff88!important}
+        .tab-btn{background:none;border:none;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:2px;padding:8px 14px;color:#333;border-bottom:1px solid transparent;transition:all .2s}
+        .tab-btn.active{color:#00ff88;border-bottom:1px solid #00ff88}
+        .tab-btn:hover{color:#666}
+        .tf-btn{background:none;border:1px solid #111;color:#333;font-family:'JetBrains Mono',monospace;font-size:9px;padding:3px 8px;border-radius:2px;cursor:pointer;letter-spacing:1px}
+        .tf-btn.active{border-color:#00ff8844;color:#00ff88;background:#00ff8808}
+        .grp-btn{background:none;border:none;font-family:'JetBrains Mono',monospace;font-size:8px;letter-spacing:1px;padding:5px 6px;color:#222;cursor:pointer;border-bottom:1px solid transparent}
+        .grp-btn.active{color:#00ff88;border-bottom:1px solid #00ff88}
+        .order-btn-buy{background:linear-gradient(135deg,#00311a,#004d28);border:1px solid #00ff8833;color:#00ff88;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;letter-spacing:2px;cursor:pointer;padding:10px;border-radius:3px;width:100%}
+        .order-btn-buy:hover{background:linear-gradient(135deg,#004d28,#006635);border-color:#00ff8866}
+        .order-btn-sell{background:linear-gradient(135deg,#310000,#4d0000);border:1px solid #ff444433;color:#ff4444;font-family:'JetBrains Mono',monospace;font-weight:700;font-size:12px;letter-spacing:2px;cursor:pointer;padding:10px;border-radius:3px;width:100%}
+        .order-btn-sell:hover{background:linear-gradient(135deg,#4d0000,#660000);border-color:#ff444466}
+        .inp{background:#080e1a;border:1px solid #ffffff0d;color:#e0e0e0;font-family:'JetBrains Mono',monospace;font-size:11px;padding:6px 8px;border-radius:2px;width:100%}
+        .inp:focus{border-color:#00ff8833}
       `}</style>
 
-      {/* CRT SCANLINE */}
-      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:999,background:"repeating-linear-gradient(0deg,#00000022 0px,#00000022 1px,transparent 1px,transparent 4px)"}}/>
-      {/* MOVING SCAN LINE */}
-      <div style={{position:"fixed",left:0,right:0,height:2,background:"linear-gradient(90deg,transparent,#39ff1411,transparent)",animation:"scan 6s linear infinite",zIndex:998,pointerEvents:"none"}}/>
-      {/* VIGNETTE */}
-      <div style={{position:"fixed",inset:0,background:"radial-gradient(ellipse at center,transparent 60%,#000000cc 100%)",pointerEvents:"none",zIndex:997}}/>
+      {/* SCANLINE EFFECT */}
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,pointerEvents:"none",zIndex:999,background:"repeating-linear-gradient(0deg,transparent,transparent 2px,#00000018 2px,#00000018 4px)",mixBlendMode:"overlay"}}/>
+
+      {/* GRID BACKGROUND */}
+      <div style={{position:"fixed",top:0,left:0,right:0,bottom:0,pointerEvents:"none",zIndex:0,
+        backgroundImage:"linear-gradient(#00ff8804 1px,transparent 1px),linear-gradient(90deg,#00ff8804 1px,transparent 1px)",
+        backgroundSize:"40px 40px"
+      }}/>
 
       {/* ══ TOPBAR ══ */}
-      <div style={{height:44,flexShrink:0,display:"flex",alignItems:"stretch",borderBottom:"1px solid #39ff1422",background:"#000",position:"relative",zIndex:10}}>
-
+      <div style={{
+        position:"relative",zIndex:10,
+        height:42,flexShrink:0,
+        display:"flex",alignItems:"center",gap:0,
+        borderBottom:"1px solid #00ff8815",
+        background:"linear-gradient(90deg,#020c06,#020408,#020408,#020c06)",
+      }}>
         {/* LOGO */}
-        <div style={{padding:"0 16px",borderRight:"1px solid #39ff1422",display:"flex",alignItems:"center",gap:10,minWidth:170}}>
-          <div style={{border:"1px solid #39ff14",padding:"2px 6px",animation:"pulse-green 2s infinite"}}>
-            <span style={{fontFamily:"'VT323',monospace",fontSize:20,color:"#39ff14",letterSpacing:2,animation:"flicker 4s infinite"}}>DnR</span>
+        <div style={{padding:"0 16px",borderRight:"1px solid #00ff8815",height:"100%",display:"flex",alignItems:"center",gap:10,minWidth:160}}>
+          <div style={{
+            width:28,height:28,
+            background:"linear-gradient(135deg,#00ff88,#00cc6a)",
+            clipPath:"polygon(50% 0%,100% 25%,100% 75%,50% 100%,0% 75%,0% 25%)",
+            display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,
+          }}>
+            <span style={{color:"#000",fontSize:11,fontWeight:900,fontFamily:"'Orbitron',monospace"}}>D</span>
           </div>
           <div>
-            <div style={{fontSize:8,color:"#39ff1466",letterSpacing:4}}>TERMINAL</div>
-            <div style={{fontSize:7,color:"#1a3a1a",letterSpacing:2}}>v2.6.0_HACK</div>
+            <div style={{fontFamily:"'Orbitron',monospace",fontSize:11,fontWeight:700,color:"#00ff88",letterSpacing:3,lineHeight:1,animation:"flicker 8s infinite"}}>DnR</div>
+            <div style={{fontSize:7,color:"#00ff8844",letterSpacing:4}}>TERMINAL</div>
           </div>
         </div>
 
-        {/* STATUS */}
-        <div style={{padding:"0 12px",borderRight:"1px solid #39ff1411",display:"flex",alignItems:"center",gap:6}}>
-          <div style={{width:6,height:6,background:stColor,boxShadow:`0 0 8px ${stColor}`,animation:"blink 1s infinite"}}/>
-          <span style={{fontSize:8,color:stColor,letterSpacing:2}}>{wsStatus.toUpperCase()}</span>
-          <span style={{fontSize:7,color:demoMode?"#ffff0066":"#39ff1444",border:`1px solid ${demoMode?"#ffff0033":"#39ff1422"}`,padding:"1px 4px",letterSpacing:1}}>{demoMode?"//DEMO":"//LIVE"}</span>
+        {/* CONNECTION */}
+        <div style={{padding:"0 14px",borderRight:"1px solid #ffffff08",height:"100%",display:"flex",alignItems:"center",gap:8}}>
+          <div style={{width:5,height:5,borderRadius:"50%",background:stColor,boxShadow:`0 0 6px ${stColor}`,animation:wsStatus==="connecting"?"pulse 1s infinite":"none"}}/>
+          <span style={{fontSize:9,color:stColor,letterSpacing:2}}>{wsStatus.toUpperCase()}</span>
+          <span style={{fontSize:8,color:demoMode?"#ffaa00":"#00ff8866",letterSpacing:1,marginLeft:4,border:`1px solid ${demoMode?"#ffaa0033":"#00ff8822"}`,padding:"1px 5px",borderRadius:1}}>{demoMode?"DEMO":"LIVE"}</span>
         </div>
 
-        {/* WS */}
-        <div style={{padding:"0 10px",borderRight:"1px solid #39ff1411",display:"flex",alignItems:"center",gap:6}}>
-          <span style={{fontSize:8,color:"#1a5a1a"}}>$</span>
-          <input value={wsUrl} onChange={e=>setWsUrl(e.target.value)} className="hack-inp" style={{width:155,fontSize:9,padding:"3px 6px"}}/>
+        {/* WS INPUT */}
+        <div style={{padding:"0 10px",borderRight:"1px solid #ffffff08",height:"100%",display:"flex",alignItems:"center",gap:6}}>
+          <input value={wsUrl} onChange={e=>setWsUrl(e.target.value)} className="inp" style={{width:160,fontSize:9,padding:"4px 7px",background:"#00000044"}}/>
           {connected
-            ?<button className="hack-btn" onClick={()=>{wsRef.current?.close();setWsStatus("disconnected");startDemo();}} style={{borderColor:"#ff000033",color:"#ff000088"}}>KILL</button>
-            :<button className="hack-btn" onClick={()=>{
+            ? <button onClick={()=>{wsRef.current?.close();setWsStatus("disconnected");startDemo();}} style={{background:"#1a0000",border:"1px solid #ff444433",color:"#ff4444",fontSize:8,padding:"3px 8px",borderRadius:2,cursor:"pointer",letterSpacing:1,fontFamily:"'JetBrains Mono',monospace"}}>DISCONNECT</button>
+            : <button onClick={()=>{
                 if(wsRef.current)wsRef.current.close();
                 setWsStatus("connecting");
                 const ws=new WebSocket(wsUrl);wsRef.current=ws;
                 ws.onopen=()=>{setWsStatus("connected");setDemoMode(false);clearInterval(demoInterval.current);PAIRS.forEach(p=>ws.send(JSON.stringify({type:"get_candles",symbol:p,timeframe:timeframe,count:100})));};
                 ws.onmessage=e=>{try{const msg=JSON.parse(e.data);
                   if(msg.type==="ticks")setTicks(prev=>({...prev,...msg.data}));
-                  else if(msg.type==="candles")setCandles(prev=>({...prev,[msg.symbol]:msg.data}));
+                  else if(msg.type==="candles"){setCandles(prev=>({...prev,[msg.symbol]:msg.data}));}
                   else if(msg.type==="account"||msg.type==="init"){const pos=msg.positions||[];setPositions(pos);positionsRef.current=pos;setAccount(msg.account);}
                   else if(msg.type==="order_result"){
-                    if(msg.success){const rm=`[OK] ${msg.action} #${msg.ticket} @ ${msg.price}`;setOrderResult({ok:true,msg:rm});addAutoLog(msg.symbol||"","ORDER",rm,true);setAutoStatus(prev=>({...prev,[msg.symbol]:{lastAction:msg.action,lastTime:new Date().toLocaleTimeString(),ticket:msg.ticket}}));setTimeout(()=>{if(wsRef.current?.readyState===1)wsRef.current.send(JSON.stringify({type:"get_positions"}));},800);}
-                    else{setOrderResult({ok:false,msg:`[ERR] ${msg.error||"failed"}`});}
+                    if(msg.success){const rm=`✓ ${msg.action} #${msg.ticket} @ ${msg.price}`;setOrderResult({ok:true,msg:rm});addAutoLog(msg.symbol||"","ORDER",rm,true);setAutoStatus(prev=>({...prev,[msg.symbol]:{lastAction:msg.action,lastTime:new Date().toLocaleTimeString("id-ID"),ticket:msg.ticket}}));setTimeout(()=>{if(wsRef.current?.readyState===1)wsRef.current.send(JSON.stringify({type:"get_positions"}));},800);}
+                    else{setOrderResult({ok:false,msg:`✗ ${msg.error||"Order gagal"}`});}
                     setTimeout(()=>setOrderResult(null),6000);
                   }
                   else if(msg.type==="close_result"){if(msg.success){setPositions(prev=>prev.filter(p=>p.ticket!==msg.ticket));positionsRef.current=positionsRef.current.filter(p=>p.ticket!==msg.ticket);}}
                 }catch{}};
                 ws.onerror=()=>setWsStatus("error");
                 ws.onclose=()=>{setWsStatus("disconnected");startDemo();};
-              }} style={{color:"#39ff14",borderColor:"#39ff1444"}}>EXEC</button>
+              }} style={{background:"#001a0d",border:"1px solid #00ff8833",color:"#00ff88",fontSize:8,padding:"3px 8px",borderRadius:2,cursor:"pointer",letterSpacing:1,fontFamily:"'JetBrains Mono',monospace"}}>CONNECT</button>
           }
         </div>
 
         {/* ACCOUNT */}
-        {account&&(
-          <div style={{display:"flex",marginLeft:"auto"}}>
+        {account && (
+          <div style={{marginLeft:"auto",display:"flex",gap:0,height:"100%"}}>
             {[
-              ["[BAL]",`$${account.balance?.toLocaleString()}`,"#39ff1488"],
-              ["[EQ]", `$${account.equity?.toLocaleString()}`,"#39ff14"],
-              ["[PNL]",`${account.profit>=0?"+":""}$${account.profit?.toFixed(2)}`,account.profit>=0?"#39ff14":"#ff0000"],
+              ["BAL", `$${account.balance?.toLocaleString()}`, "#888"],
+              ["EQ",  `$${account.equity?.toLocaleString()}`,  "#00ff88"],
+              ["P&L", `${account.profit>=0?"+":""}$${account.profit?.toFixed(2)}`, account.profit>=0?"#00ff88":"#ff4444"],
             ].map(([k,v,c])=>(
-              <div key={k} style={{padding:"0 12px",borderLeft:"1px solid #39ff1411",display:"flex",flexDirection:"column",justifyContent:"center",textAlign:"right"}}>
-                <div style={{fontSize:7,color:"#1a4a1a",letterSpacing:1}}>{k}</div>
-                <div style={{fontSize:11,color:c,letterSpacing:1,fontFamily:"'VT323',monospace"}}>{v}</div>
+              <div key={k} style={{padding:"0 14px",borderLeft:"1px solid #ffffff06",height:"100%",display:"flex",flexDirection:"column",justifyContent:"center",textAlign:"right"}}>
+                <div style={{fontSize:7,color:"#333",letterSpacing:2}}>{k}</div>
+                <div style={{fontSize:11,color:c,fontWeight:700,letterSpacing:1}}>{v}</div>
               </div>
             ))}
           </div>
         )}
 
         {/* CLOCK */}
-        <div style={{padding:"0 12px",borderLeft:"1px solid #39ff1411",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"flex-end"}}>
-          <div style={{fontSize:7,color:"#1a4a1a",letterSpacing:2}}>[SYS_TIME]</div>
-          <div style={{fontSize:13,color:"#39ff1066",fontFamily:"'VT323',monospace",letterSpacing:2}}>{new Date().toLocaleTimeString()}</div>
+        <div style={{padding:"0 14px",borderLeft:"1px solid #ffffff06",height:"100%",display:"flex",flexDirection:"column",justifyContent:"center",alignItems:"flex-end"}}>
+          <div style={{fontSize:8,color:"#222",letterSpacing:2}}>SERVER</div>
+          <div style={{fontSize:11,color:"#333",fontFamily:"'Orbitron',monospace",letterSpacing:1}}>{new Date().toLocaleTimeString("id-ID")}</div>
         </div>
       </div>
 
-      {/* ══ MAIN ══ */}
-      <div style={{display:"grid",gridTemplateColumns:"195px 1fr",flex:1,overflow:"hidden",position:"relative",zIndex:1}}>
+      {/* ══ MAIN LAYOUT ══ */}
+      <div style={{display:"grid",gridTemplateColumns:"200px 1fr",flex:1,overflow:"hidden",position:"relative",zIndex:1}}>
 
-        {/* ══ LEFT ══ */}
-        <div style={{borderRight:"1px solid #39ff1418",display:"flex",flexDirection:"column",overflow:"hidden"}}>
+        {/* ══ LEFT SIDEBAR ══ */}
+        <div style={{borderRight:"1px solid #00ff8810",display:"flex",flexDirection:"column",overflow:"hidden",background:"#020408"}}>
 
-          {/* group */}
-          <div style={{display:"flex",borderBottom:"1px solid #39ff1415",flexShrink:0,background:"#000"}}>
+          {/* Group tabs */}
+          <div style={{display:"flex",borderBottom:"1px solid #00ff8810",flexShrink:0}}>
             {Object.keys(GROUPS).map(g=>(
-              <button key={g} className={`grp${group===g?" on":""}`} onClick={()=>setGroup(g)}>{g}</button>
+              <button key={g} className={`grp-btn${group===g?" active":""}`} onClick={()=>setGroup(g)}>{g}</button>
             ))}
           </div>
 
-          {/* header */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 56px",padding:"4px 8px",borderBottom:"1px solid #39ff1410",background:"#000",flexShrink:0}}>
-            <span style={{fontSize:7,color:"#1a4a1a",letterSpacing:2}}>// SYMBOL</span>
-            <span style={{fontSize:7,color:"#1a4a1a",letterSpacing:1,textAlign:"right"}}>PRICE</span>
+          {/* Column headers */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 52px",padding:"5px 8px",borderBottom:"1px solid #00ff8808",flexShrink:0}}>
+            <span style={{fontSize:7,color:"#222",letterSpacing:2}}>INSTRUMENT</span>
+            <span style={{fontSize:7,color:"#222",letterSpacing:1,textAlign:"right"}}>PRICE</span>
           </div>
 
-          {/* pairs */}
-          <div style={{overflowY:"auto",flex:1,background:"#000"}}>
+          {/* Pair list */}
+          <div style={{overflowY:"auto",flex:1}}>
             {filteredPairs.map(sym=>{
               const t=ticks[sym],c=candles[sym];
               const isUp=t&&c?.length>1?t.bid>=c[0].close:true;
               const chg=c?.length>1?(((t?.bid-c[0].close)/c[0].close)*100):0;
-              const isSel=selected===sym;
+              const isActive=selected===sym;
               const an=analyses[sym];
-              const lst=autoStatus[sym];
               return(
-                <div key={sym} className={`hack-row${isSel?" sel":""}`}
+                <div key={sym} className={`pair-row${isActive?" active":""}`}
                   onClick={()=>{setSelected(sym);if(connected&&wsRef.current?.readyState===1)wsRef.current.send(JSON.stringify({type:"get_candles",symbol:sym,timeframe:timeframe,count:100}));}}
-                  style={{display:"grid",gridTemplateColumns:"1fr 56px",padding:"5px 8px",cursor:"pointer",borderBottom:"1px solid #39ff1408",borderLeft:"2px solid transparent"}}>
+                  style={{display:"grid",gridTemplateColumns:"1fr 52px",padding:"5px 8px",cursor:"pointer",borderBottom:"1px solid #ffffff03",borderLeft:"2px solid transparent",animation:isActive?"slideIn .2s ease":""}}
+                >
                   <div>
-                    <div style={{display:"flex",gap:4,alignItems:"center",marginBottom:1}}>
-                      <span style={{fontSize:9,fontWeight:700,color:isSel?"#39ff14":"#2a6a2a",letterSpacing:.5}}>{sym}</span>
-                      {an&&<span style={{fontSize:6,padding:"0 3px",border:`1px solid ${an.signal==="BUY"?"#39ff1444":an.signal==="SELL"?"#ff000044":"#333"}`,color:an.signal==="BUY"?"#39ff14":an.signal==="SELL"?"#ff0000":"#444"}}>{an.signal}</span>}
-                      {lst&&<span style={{fontSize:7,color:lst.lastAction==="BUY"?"#39ff1488":"#ff000088"}}>{lst.lastAction==="BUY"?"▲":"▼"}</span>}
+                    <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+                      <span style={{fontSize:10,fontWeight:700,color:isActive?"#00ff88":"#aaa",letterSpacing:.5}}>{sym}</span>
+                      {an&&<span style={{fontSize:7,padding:"0 3px",borderRadius:1,background:an.signal==="BUY"?"#00ff8822":an.signal==="SELL"?"#ff444422":"#ffffff11",color:an.signal==="BUY"?"#00ff88":an.signal==="SELL"?"#ff4444":"#555",letterSpacing:1}}>{an.signal}</span>}
+                      {autoStatus[sym]&&<span style={{fontSize:7,color:autoStatus[sym].lastAction==="BUY"?"#00ff88":"#ff4444"}}>{autoStatus[sym].lastAction==="BUY"?"▲":"▼"}</span>}
                     </div>
-                    <span style={{fontSize:7,color:parseFloat(chg)>=0?"#39ff1055":"#ff000055"}}>{parseFloat(chg)>=0?"+":""}{chg.toFixed(2)}%</span>
+                    <div style={{display:"flex",alignItems:"center",gap:4}}>
+                      <span style={{fontSize:8,color:parseFloat(chg)>=0?"#00ff8866":"#ff444466"}}>{parseFloat(chg)>=0?"+":""}{chg.toFixed(2)}%</span>
+                    </div>
                   </div>
                   <div style={{textAlign:"right"}}>
-                    <div style={{fontSize:10,color:isUp?"#39ff14":"#ff0000",fontFamily:"'VT323',monospace",letterSpacing:.3}}>{t?t.bid.toFixed(DIGITS[sym]||5):"-.--"}</div>
-                    <div style={{fontSize:6,color:"#1a3a1a"}}>{t?.spread&&`spd:${t.spread}`}</div>
+                    <div style={{fontSize:10,fontWeight:700,color:isUp?"#00ff88":"#ff4444",letterSpacing:.3}}>{t?t.bid.toFixed(DIGITS[sym]||5):"—"}</div>
+                    <div style={{fontSize:7,color:"#222"}}>{t?.spread||""}</div>
                   </div>
                 </div>
               );
             })}
           </div>
 
-          {/* auto status */}
-          <div style={{borderTop:"1px solid #39ff1415",padding:"5px 8px",background:"#000",flexShrink:0}}>
-            <div style={{fontSize:7,color:autoEnabled?"#39ff14":"#1a3a1a",letterSpacing:2,animation:autoEnabled?"blink 2s infinite":""}}>{autoEnabled?`> AUTO_TRADE [${autoPairs.length}P] RUNNING`:"> AUTO_TRADE IDLE"}</div>
+          {/* Auto indicator */}
+          <div style={{borderTop:"1px solid #00ff8810",padding:"6px 10px",background:"#020408",flexShrink:0}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span style={{fontSize:8,color:autoEnabled?"#00ff88":"#222",letterSpacing:2,animation:autoEnabled?"glow 2s infinite":"none"}}>
+                {autoEnabled?"● AUTO ON":"○ AUTO"}
+              </span>
+              <span style={{fontSize:8,color:"#222"}}>{autoPairs.length} pairs</span>
+            </div>
           </div>
         </div>
 
-        {/* ══ RIGHT ══ */}
-        <div style={{display:"flex",flexDirection:"column",overflow:"hidden",background:"#000"}}>
+        {/* ══ RIGHT PANEL ══ */}
+        <div style={{display:"flex",flexDirection:"column",overflow:"hidden",background:"#020408"}}>
 
-          {/* pair header */}
-          <div style={{borderBottom:"1px solid #39ff1415",padding:"0 14px",height:46,display:"flex",alignItems:"center",gap:14,flexShrink:0}}>
+          {/* Pair header */}
+          <div style={{borderBottom:"1px solid #00ff8810",padding:"0 16px",height:50,display:"flex",alignItems:"center",gap:16,flexShrink:0}}>
             <div>
-              <div style={{fontFamily:"'VT323',monospace",fontSize:22,color:"#39ff14",letterSpacing:4,animation:"glitch 8s infinite",lineHeight:1}}>{selected}</div>
-              <div style={{fontSize:7,color:"#1a5a1a",letterSpacing:2}}>{PAIR_NAMES[selected]?.toUpperCase()}</div>
+              <div style={{fontFamily:"'Orbitron',monospace",fontSize:16,fontWeight:700,color:"#00ff88",letterSpacing:3,lineHeight:1}}>{selected}</div>
+              <div style={{fontSize:8,color:"#333",letterSpacing:2,marginTop:2}}>{PAIR_NAMES[selected]}</div>
             </div>
-            <div style={{fontFamily:"'VT323',monospace",fontSize:26,color:tick?(ticks[selected]?.bid>=(candles[selected]?.[0]?.close||0)?"#39ff14":"#ff0000"):"#1a3a1a",letterSpacing:1}}>
-              {tick?tick.bid.toFixed(d):"-.------"}
+            <div style={{fontSize:22,fontWeight:700,color:tick?(ticks[selected]?.bid>=(candles[selected]?.[0]?.close||0)?"#00ff88":"#ff4444"):"#333",fontFamily:"'Orbitron',monospace",letterSpacing:1}}>
+              {tick?tick.bid.toFixed(d):"———"}
             </div>
-            {tick&&<div style={{fontSize:8,color:"#1a5a1a"}}>ASK<br/><span style={{color:"#39ff1066",fontFamily:"'VT323',monospace",fontSize:13}}>{tick.ask?.toFixed(d)}</span></div>}
+            {tick&&<div style={{fontSize:9,color:"#333"}}>ASK <span style={{color:"#00ff8866"}}>{tick.ask?.toFixed(d)}</span></div>}
 
-            {/* TF */}
-            <div style={{display:"flex",gap:3,marginLeft:"auto"}}>
+            {/* Timeframes */}
+            <div style={{display:"flex",gap:4,marginLeft:"auto"}}>
               {["M1","M5","M15","H1","H4","D1"].map(t=>(
-                <button key={t} className={`tf${timeframe===t?" on":""}`} onClick={()=>{setTimeframe(t);if(connected)wsRef.current.send(JSON.stringify({type:"get_candles",symbol:selected,timeframe:t,count:100}));}}>{t}</button>
+                <button key={t} className={`tf-btn${timeframe===t?" active":""}`} onClick={()=>{setTimeframe(t);if(connected)wsRef.current.send(JSON.stringify({type:"get_candles",symbol:selected,timeframe:t,count:100}));}}>{t}</button>
               ))}
             </div>
-            <button className="hack-btn" onClick={()=>handleAnalyze(selected)} style={{color:"#39ff1088",borderColor:"#39ff1033"}}>
-              {analyzing[selected]?"[PROC...]":"[AI_SCAN]"}
+
+            {/* Analyze button */}
+            <button onClick={()=>handleAnalyze(selected)} style={{background:"#00ff8808",border:"1px solid #00ff8822",color:"#00ff8888",fontSize:9,padding:"4px 10px",borderRadius:2,cursor:"pointer",fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>
+              {analyzing[selected]?"◌ AI...":"⚡ AI"}
             </button>
           </div>
 
-          {/* tabs */}
-          <div style={{display:"flex",borderBottom:"1px solid #39ff1411",background:"#000",flexShrink:0}}>
-            <span style={{fontSize:7,color:"#1a3a1a",padding:"7px 10px",alignSelf:"center"}}>root@dnr:~$</span>
-            {[["chart","chart.exe"],["positions",`positions.exe${positions.length?` [${positions.length}]`:""}`],["auto",`auto_trade.exe${autoEnabled?" [ON]":""}`]].map(([k,l])=>(
-              <button key={k} className={`tab${tab===k?" on":""}`} onClick={()=>setTab(k)}>{l}</button>
+          {/* Tabs */}
+          <div style={{display:"flex",borderBottom:"1px solid #00ff8808",flexShrink:0}}>
+            {[["chart","CHART"],["positions",`POSITIONS${positions.length?` [${positions.length}]`:""}`],["auto",`AUTO${autoEnabled?" ●":""}`]].map(([k,l])=>(
+              <button key={k} className={`tab-btn${tab===k?" active":""}`} onClick={()=>setTab(k)} style={{color:tab===k?"#00ff88":k==="auto"&&autoEnabled?"#00ff8844":"#333"}}>{l}</button>
             ))}
           </div>
 
-          {/* content */}
-          <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column",gap:8}}>
+          {/* ── CONTENT ── */}
+          <div style={{flex:1,overflowY:"auto",padding:12,display:"flex",flexDirection:"column",gap:10}}>
 
-            {/* ── CHART ── */}
-            {tab==="chart"&&(<>
-              <div style={{border:"1px solid #39ff1418",background:"#000",padding:"6px 2px"}}>
-                <div style={{fontSize:7,color:"#1a4a1a",padding:"0 8px",marginBottom:4,letterSpacing:2}}>// PRICE_CHART :: {selected} :: {timeframe}</div>
-                <MainChart data={candles[selected]} symbol={selected}/>
-              </div>
-
-              {/* AI result */}
-              {analyses[selected]&&(
-                <div style={{border:"1px solid #39ff1420",background:"#000",padding:10,animation:"fadeIn .3s"}}>
-                  <div style={{fontSize:7,color:"#1a5a1a",letterSpacing:3,marginBottom:6}}>// AI_ANALYSIS_OUTPUT</div>
-                  <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                    <span style={{
-                      fontFamily:"'VT323',monospace",fontSize:16,letterSpacing:3,padding:"0 10px",
-                      border:`1px solid ${analyses[selected].signal==="BUY"?"#39ff14":analyses[selected].signal==="SELL"?"#ff0000":"#333"}`,
-                      color:analyses[selected].signal==="BUY"?"#39ff14":analyses[selected].signal==="SELL"?"#ff0000":"#444",
-                      background:analyses[selected].signal==="BUY"?"#001a00":analyses[selected].signal==="SELL"?"#1a0000":"#111",
-                    }}>{analyses[selected].signal}</span>
-                    <span style={{fontSize:8,color:analyses[selected].confidence==="HIGH"?"#39ff14":analyses[selected].confidence==="MEDIUM"?"#ffff00":"#ff0000"}}>CONF:{analyses[selected].confidence}</span>
-                    <span style={{fontSize:8,color:"#1a5a1a",marginLeft:"auto"}}>{timeframe}</span>
-                  </div>
-                  <div style={{fontSize:9,color:"#2a6a2a",lineHeight:1.7,marginBottom:6,borderLeft:"2px solid #39ff1433",paddingLeft:8}}>{analyses[selected].summary||analyses[selected].trend}</div>
-                  <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:8}}>
-                    {[["S//",analyses[selected].support,"#39ff1066"],["R//",analyses[selected].resistance,"#ff000066"],["SL",`${analyses[selected].sl_pips}p`,"#ffff0077"],["TP",`${analyses[selected].tp_pips}p`,"#00aaff77"]].map(([k,v,c])=>(
-                      <span key={k} style={{color:"#1a4a1a"}}>{k} <b style={{color:c,fontFamily:"'VT323',monospace",fontSize:12}}>{v}</b></span>
-                    ))}
-                  </div>
+            {/* ══ CHART TAB ══ */}
+            {tab==="chart"&&(
+              <>
+                {/* Chart */}
+                <div style={{background:"#030810",border:"1px solid #00ff8810",borderRadius:3,padding:"8px 4px"}}>
+                  <MainChart data={candles[selected]} symbol={selected}/>
                 </div>
-              )}
 
-              {/* order */}
-              <div style={{border:"1px solid #39ff1415",background:"#000",padding:10}}>
-                <div style={{fontSize:7,color:"#1a5a1a",letterSpacing:3,marginBottom:8}}>// EXECUTE_ORDER :: {selected}</div>
-                {tick&&(
-                  <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:0,marginBottom:8,border:"1px solid #39ff1418"}}>
-                    <div style={{padding:"6px 8px",background:"#0d0000",textAlign:"center"}}>
-                      <div style={{fontSize:6,color:"#3a1a1a",letterSpacing:2}}>BID</div>
-                      <div style={{fontSize:16,color:"#ff0000",fontFamily:"'VT323',monospace",letterSpacing:1}}>{tick.bid?.toFixed(d)}</div>
+                {/* AI Result */}
+                {analyses[selected]&&(
+                  <div style={{background:"#030810",border:"1px solid #00ff8815",borderRadius:3,padding:12,animation:"fadeUp .3s ease"}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                      <span style={{fontSize:8,color:"#00ff8844",letterSpacing:3}}>AI SIGNAL</span>
+                      <span style={{
+                        fontSize:11,fontWeight:700,letterSpacing:2,padding:"2px 10px",borderRadius:1,
+                        background:analyses[selected].signal==="BUY"?"#00ff8815":analyses[selected].signal==="SELL"?"#ff444415":"#ffffff08",
+                        border:`1px solid ${analyses[selected].signal==="BUY"?"#00ff8833":analyses[selected].signal==="SELL"?"#ff444433":"#333"}`,
+                        color:analyses[selected].signal==="BUY"?"#00ff88":analyses[selected].signal==="SELL"?"#ff4444":"#555",
+                      }}>{analyses[selected].signal}</span>
+                      <span style={{fontSize:8,color:analyses[selected].confidence==="HIGH"?"#00ff88":analyses[selected].confidence==="MEDIUM"?"#ffaa00":"#ff4444",letterSpacing:1}}>{analyses[selected].confidence}</span>
                     </div>
-                    <div style={{padding:"6px 8px",textAlign:"center",borderLeft:"1px solid #39ff1415",borderRight:"1px solid #39ff1415"}}>
-                      <div style={{fontSize:6,color:"#1a3a1a"}}>SPD</div>
-                      <div style={{fontSize:10,color:"#1a4a1a",fontFamily:"'VT323',monospace"}}>{tick.spread}</div>
-                    </div>
-                    <div style={{padding:"6px 8px",background:"#000d00",textAlign:"center"}}>
-                      <div style={{fontSize:6,color:"#1a3a1a",letterSpacing:2}}>ASK</div>
-                      <div style={{fontSize:16,color:"#39ff14",fontFamily:"'VT323',monospace",letterSpacing:1}}>{tick.ask?.toFixed(d)}</div>
+                    <p style={{fontSize:10,color:"#666",lineHeight:1.6,marginBottom:8}}>{analyses[selected].summary||analyses[selected].trend}</p>
+                    <div style={{display:"flex",gap:12,flexWrap:"wrap"}}>
+                      {[["S",analyses[selected].support,"#00ff8866"],["R",analyses[selected].resistance,"#ff444466"],["SL",`${analyses[selected].sl_pips}p`,"#ffaa0088"],["TP",`${analyses[selected].tp_pips}p`,"#8888ff88"]].map(([k,v,c])=>(
+                        <span key={k} style={{fontSize:9,color:"#333"}}>{k} <b style={{color:c}}>{v}</b></span>
+                      ))}
                     </div>
                   </div>
                 )}
-                <OrderPanel symbol={selected} tick={tick} onOrder={handleOrder} connected={connected} demoMode={demoMode} orderResult={orderResult}/>
-              </div>
-            </>)}
 
-            {/* ── POSITIONS ── */}
+                {/* Order Panel */}
+                <div style={{background:"#030810",border:"1px solid #ffffff08",borderRadius:3,padding:12}}>
+                  <div style={{fontSize:8,color:"#00ff8833",letterSpacing:3,marginBottom:10}}>QUICK ORDER — {selected}</div>
+
+                  {/* BID/ASK */}
+                  {tick&&(
+                    <div style={{display:"grid",gridTemplateColumns:"1fr auto 1fr",gap:0,marginBottom:10,border:"1px solid #ffffff06",borderRadius:2,overflow:"hidden"}}>
+                      <div style={{padding:"6px 10px",background:"#0d0000",textAlign:"center"}}>
+                        <div style={{fontSize:7,color:"#333",letterSpacing:2}}>BID</div>
+                        <div style={{fontSize:14,fontWeight:700,color:"#ff4444",fontFamily:"'Orbitron',monospace",letterSpacing:.5}}>{tick.bid?.toFixed(d)}</div>
+                      </div>
+                      <div style={{padding:"6px 8px",background:"#030810",textAlign:"center",borderLeft:"1px solid #ffffff06",borderRight:"1px solid #ffffff06"}}>
+                        <div style={{fontSize:7,color:"#222"}}>SPR</div>
+                        <div style={{fontSize:9,color:"#333"}}>{tick.spread}</div>
+                      </div>
+                      <div style={{padding:"6px 10px",background:"#000d00",textAlign:"center"}}>
+                        <div style={{fontSize:7,color:"#333",letterSpacing:2}}>ASK</div>
+                        <div style={{fontSize:14,fontWeight:700,color:"#00ff88",fontFamily:"'Orbitron',monospace",letterSpacing:.5}}>{tick.ask?.toFixed(d)}</div>
+                      </div>
+                    </div>
+                  )}
+
+                  <OrderPanel symbol={selected} tick={tick} onOrder={handleOrder} connected={connected} demoMode={demoMode} orderResult={orderResult}/>
+                </div>
+              </>
+            )}
+
+            {/* ══ POSITIONS TAB ══ */}
             {tab==="positions"&&(
-              <div style={{border:"1px solid #39ff1415",background:"#000",padding:10}}>
-                <div style={{fontSize:7,color:"#1a5a1a",letterSpacing:3,marginBottom:8}}>// OPEN_POSITIONS [{positions.length}]</div>
+              <div style={{background:"#030810",border:"1px solid #ffffff08",borderRadius:3,padding:12}}>
+                <div style={{fontSize:8,color:"#00ff8833",letterSpacing:3,marginBottom:10}}>OPEN POSITIONS [{positions.length}]</div>
                 <PositionsTable positions={positions} onClose={handleClose}/>
               </div>
             )}
 
-            {/* ── AUTO ── */}
+            {/* ══ AUTO TRADING TAB ══ */}
             {tab==="auto"&&(
               <div style={{display:"flex",flexDirection:"column",gap:8}}>
 
-                <div style={{border:`1px solid ${autoEnabled?"#39ff1444":"#39ff1415"}`,background:"#000",padding:10}}>
-                  <div style={{fontSize:7,color:"#1a5a1a",letterSpacing:3,marginBottom:8}}>// AUTO_TRADE_ENGINE</div>
-                  <div style={{fontFamily:"'VT323',monospace",fontSize:13,color:"#1a5a1a",marginBottom:8,lineHeight:1.6}}>
-                    <span style={{color:"#39ff1044"}}>$</span> trigger    = H1_CANDLE_CLOSE<br/>
-                    <span style={{color:"#39ff1044"}}>$</span> model      = groq/llama-3.3-70b<br/>
-                    <span style={{color:"#39ff1044"}}>$</span> filter     = SKIP_IF_WAIT<br/>
-                    <span style={{color:"#39ff1044"}}>$</span> sl_mode    = AI + BUFFER_ANTI_HUNTER<br/>
-                    <span style={{color:"#39ff1044"}}>$</span> max_pos    = 1_PER_PAIR<br/>
-                    <span style={{color:"#39ff1044"}}>$</span> status     = <span style={{color:autoEnabled?"#39ff14":"#ff0000",animation:autoEnabled?"blink 1s infinite":""}}>{autoEnabled?"RUNNING":"STOPPED"}</span>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:8,marginBottom:8}}>
+                {/* Engine Control */}
+                <div style={{background:"#030810",border:`1px solid ${autoEnabled?"#00ff8822":"#ffffff08"}`,borderRadius:3,padding:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                     <div>
-                      <div style={{fontSize:7,color:"#1a4a1a",letterSpacing:2,marginBottom:3}}>LOT_SIZE</div>
-                      <input className="hack-inp" value={autoLot} onChange={e=>setAutoLot(e.target.value)} disabled={autoEnabled} style={{opacity:autoEnabled?0.3:1}}/>
+                      <div style={{fontSize:9,color:"#00ff8866",letterSpacing:3,marginBottom:3}}>AUTO TRADING ENGINE</div>
+                      <div style={{fontSize:8,color:"#333",letterSpacing:1}}>H1 candle close · AI H1 · BUY/SELL direct · 1 pos/pair · SL buffer active</div>
                     </div>
-                    <div style={{border:"1px solid #39ff1415",padding:"6px 8px"}}>
-                      <div style={{fontSize:7,color:"#1a4a1a",letterSpacing:2,marginBottom:3}}>SL_BUFFER_TABLE</div>
-                      <div style={{fontFamily:"'VT323',monospace",fontSize:11,color:"#1a4a1a",lineHeight:1.5}}>
-                        FX_MAJ: +6p &nbsp;| CROSS: +10-15p<br/>
-                        METALS: +40-60p | ENERGY: +25p<br/>
-                        INDEX:  +35-50p | CRYPTO: +150-250p
+                    <button onClick={handleAutoToggle} disabled={autoPairs.length===0} style={{
+                      padding:"8px 20px",borderRadius:2,border:`1px solid ${autoEnabled?"#ff444433":"#00ff8833"}`,cursor:autoPairs.length===0?"not-allowed":"pointer",
+                      fontFamily:"'JetBrains Mono',monospace",fontSize:9,fontWeight:700,letterSpacing:2,
+                      background:autoEnabled?"#0d0000":"#000d00",color:autoEnabled?"#ff4444":"#00ff88",
+                      opacity:autoPairs.length===0?0.3:1,
+                    }}>{autoEnabled?"⏹ STOP":"▶ START"}</button>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"80px 1fr",gap:8,marginBottom:10}}>
+                    <div>
+                      <div style={{fontSize:7,color:"#333",letterSpacing:2,marginBottom:3}}>LOT SIZE</div>
+                      <input className="inp" value={autoLot} onChange={e=>setAutoLot(e.target.value)} disabled={autoEnabled} style={{opacity:autoEnabled?0.3:1}}/>
+                    </div>
+                    <div style={{border:"1px solid #ffffff06",borderRadius:2,padding:"6px 8px"}}>
+                      <div style={{fontSize:7,color:"#333",letterSpacing:2,marginBottom:3}}>SL/TP MODE</div>
+                      <div style={{fontSize:8,color:"#444",lineHeight:1.6}}>
+                        AI → default per instrument → buffer anti-hunter ·
+                        <span style={{color:"#00ff8844"}}> FX +6p</span>
+                        <span style={{color:"#ffaa0044"}}> XAU +60p</span>
+                        <span style={{color:"#ff444444"}}> BTC +250p</span>
                       </div>
                     </div>
                   </div>
-                  <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                    <button onClick={handleAutoToggle} disabled={autoPairs.length===0} style={{
-                      padding:"7px 18px",border:`1px solid ${autoEnabled?"#ff000066":"#39ff1466"}`,
-                      color:autoEnabled?"#ff0000":"#39ff14",background:autoEnabled?"#0d0000":"#001a00",
-                      fontFamily:"'Share Tech Mono',monospace",fontSize:10,cursor:autoPairs.length===0?"not-allowed":"pointer",
-                      letterSpacing:2,opacity:autoPairs.length===0?0.3:1,
-                    }}>{autoEnabled?"[TERMINATE]":"[INITIALIZE]"}</button>
-                    <span style={{fontSize:8,color:"#1a4a1a"}}>pairs_active=<span style={{color:"#39ff1066"}}>{autoPairs.length}</span> &nbsp;positions=<span style={{color:"#ffff0066"}}>{positions.length}</span></span>
+                  <div style={{display:"flex",gap:16,fontSize:8}}>
+                    <span style={{color:"#333"}}>STATUS <span style={{color:autoEnabled?"#00ff88":"#444",animation:autoEnabled?"glow 2s infinite":""}}>{autoEnabled?"RUNNING":"IDLE"}</span></span>
+                    <span style={{color:"#333"}}>PAIRS <span style={{color:"#00ff8866"}}>{autoPairs.length}</span></span>
+                    <span style={{color:"#333"}}>POSITIONS <span style={{color:"#ffaa0066"}}>{positions.length}</span></span>
                   </div>
-                  {autoPairs.length===0&&<div style={{marginTop:6,fontSize:7,color:"#ff000044",letterSpacing:1}}>ERROR: no pairs selected — cannot initialize</div>}
+                  {autoPairs.length===0&&<div style={{marginTop:8,fontSize:8,color:"#ffaa0066",letterSpacing:1}}>⚠ select pairs below to enable</div>}
                 </div>
 
-                {/* pair selector */}
-                <div style={{border:"1px solid #39ff1415",background:"#000",padding:10}}>
-                  <div style={{fontSize:7,color:"#1a5a1a",letterSpacing:3,marginBottom:8}}>// SELECT_PAIRS [{autoPairs.length} ACTIVE]</div>
-                  {Object.entries(GROUPS).map(([g,gp])=>(
-                    <div key={g} style={{marginBottom:8}}>
-                      <div style={{fontSize:7,color:"#1a3a1a",letterSpacing:3,marginBottom:4}}>[{g}]</div>
+                {/* Pair Selector */}
+                <div style={{background:"#030810",border:"1px solid #ffffff08",borderRadius:3,padding:12}}>
+                  <div style={{fontSize:8,color:"#00ff8833",letterSpacing:3,marginBottom:8}}>PAIR SELECTION [{autoPairs.length}]</div>
+                  {Object.entries(GROUPS).map(([grpName,grpPairs])=>(
+                    <div key={grpName} style={{marginBottom:8}}>
+                      <div style={{fontSize:7,color:"#222",letterSpacing:3,marginBottom:4}}>{grpName}</div>
                       <div style={{display:"flex",flexWrap:"wrap",gap:3}}>
-                        {gp.map(sym=>{
-                          const on=autoPairs.includes(sym);
-                          const hp=positions.some(p=>p.symbol===sym);
+                        {grpPairs.map(sym=>{
+                          const isOn=autoPairs.includes(sym);
+                          const hasPos=positions.some(p=>p.symbol===sym);
                           const def=getDefaultSLTP(sym);
                           const lst=autoStatus[sym];
                           return(
                             <div key={sym}>
-                              <button onClick={()=>!autoEnabled&&toggleAutoPair(sym)}
+                              <button
+                                onClick={()=>!autoEnabled&&toggleAutoPair(sym)}
                                 title={`SL:${def.sl}+${def.buf}p | TP:${def.tp}p`}
-                                style={{padding:"2px 6px",fontSize:8,border:`1px solid ${on?"#39ff1444":"#1a3a1a"}`,background:on?"#001a00":"transparent",color:on?"#39ff14":"#1a5a1a",cursor:autoEnabled?"not-allowed":"pointer",opacity:autoEnabled&&!on?0.2:1,fontFamily:"'Share Tech Mono',monospace",letterSpacing:.5}}>
-                                {sym}{hp&&<span style={{color:"#39ff14"}}>·</span>}{lst&&<span style={{color:lst.lastAction==="BUY"?"#39ff14":"#ff0000",fontSize:7}}>{lst.lastAction==="BUY"?"▲":"▼"}</span>}
+                                style={{
+                                  padding:"3px 7px",borderRadius:1,fontSize:8,letterSpacing:.5,
+                                  border:`1px solid ${isOn?"#00ff8833":"#ffffff08"}`,
+                                  background:isOn?"#00ff8808":"transparent",
+                                  color:isOn?"#00ff88":"#333",
+                                  cursor:autoEnabled?"not-allowed":"pointer",
+                                  opacity:autoEnabled&&!isOn?0.3:1,
+                                  fontFamily:"'JetBrains Mono',monospace",
+                                }}>
+                                {sym}
+                                {hasPos&&<span style={{color:"#00ff88",marginLeft:2}}>·</span>}
+                                {lst&&<span style={{color:lst.lastAction==="BUY"?"#00ff8888":"#ff444488",marginLeft:2,fontSize:7}}>{lst.lastAction==="BUY"?"▲":"▼"}</span>}
                               </button>
-                              {on&&<div style={{fontSize:6,color:"#39ff1033",textAlign:"center",marginTop:1}}>{def.sl}+{def.buf}p</div>}
+                              {isOn&&<div style={{fontSize:6,color:"#00ff8833",textAlign:"center",marginTop:1}}>{def.sl}+{def.buf}/{def.tp}</div>}
                             </div>
                           );
                         })}
@@ -1203,33 +1239,39 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* log */}
-                <div style={{border:"1px solid #39ff1415",background:"#000",padding:10}}>
-                  <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}>
-                    <span style={{fontSize:7,color:"#1a5a1a",letterSpacing:3}}>// SYSTEM_LOG [{autoLog.length}]</span>
-                    <button className="hack-btn" onClick={()=>setAutoLog([])} style={{fontSize:7,padding:"1px 6px"}}>CLR</button>
+                {/* Activity Log */}
+                <div style={{background:"#030810",border:"1px solid #ffffff08",borderRadius:3,padding:12}}>
+                  <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+                    <span style={{fontSize:8,color:"#00ff8833",letterSpacing:3}}>ACTIVITY LOG [{autoLog.length}]</span>
+                    <button onClick={()=>setAutoLog([])} style={{background:"none",border:"1px solid #ffffff08",color:"#333",padding:"1px 6px",borderRadius:1,cursor:"pointer",fontSize:7,fontFamily:"'JetBrains Mono',monospace",letterSpacing:1}}>CLR</button>
                   </div>
-                  <div style={{maxHeight:260,overflowY:"auto",fontFamily:"'VT323',monospace",fontSize:12}}>
-                    {autoLog.length===0&&<div style={{color:"#1a3a1a",letterSpacing:2,padding:"10px 0"}}>{">"} AWAITING INPUT...</div>}
+                  <div style={{maxHeight:280,overflowY:"auto",display:"flex",flexDirection:"column",gap:1}}>
+                    {autoLog.length===0&&<div style={{color:"#222",fontSize:9,textAlign:"center",padding:"16px 0",letterSpacing:2}}>NO ACTIVITY</div>}
                     {autoLog.map(log=>(
-                      <div key={log.id} style={{display:"grid",gridTemplateColumns:"52px 54px 54px 1fr",gap:4,padding:"2px 0",borderBottom:"1px solid #39ff1408",color:log.ok===true?"#39ff14":log.ok===false?"#ff0000":"#2a6a2a",animation:"fadeIn .2s"}}>
-                        <span style={{color:"#1a4a1a"}}>{log.time}</span>
-                        <span style={{color:"#39ff1088"}}>{log.symbol}</span>
-                        <span style={{color:log.action==="ORDER"?"#39ff14":log.action==="ERROR"?"#ff0000":log.action==="SKIP"?"#1a4a1a":"#2a5a2a",fontWeight:700}}>{log.action}</span>
-                        <span style={{color:"#2a5a2a",fontSize:10}}>{log.msg}</span>
+                      <div key={log.id} style={{
+                        display:"grid",gridTemplateColumns:"50px 52px 52px 1fr",gap:6,
+                        padding:"3px 6px",fontSize:8,
+                        borderLeft:`2px solid ${log.ok===true?"#00ff88":log.ok===false?"#ff4444":"#ffffff11"}`,
+                        background:log.ok===true?"#00ff8806":log.ok===false?"#ff44440a":"transparent",
+                        animation:"fadeUp .2s ease",
+                      }}>
+                        <span style={{color:"#222"}}>{log.time}</span>
+                        <span style={{color:"#00ff8866",fontWeight:700}}>{log.symbol}</span>
+                        <span style={{color:log.action==="ORDER"?"#00ff88":log.action==="ERROR"?"#ff4444":log.action==="SKIP"?"#333":"#555",fontWeight:700}}>{log.action}</span>
+                        <span style={{color:"#444"}}>{log.msg}</span>
                       </div>
                     ))}
                   </div>
                 </div>
+
               </div>
             )}
-
           </div>
 
-          {/* footer */}
-          <div style={{borderTop:"1px solid #39ff1411",padding:"3px 12px",display:"flex",justifyContent:"space-between",background:"#000",flexShrink:0}}>
-            <span style={{fontSize:7,color:"#1a3a1a",letterSpacing:2,animation:"blink 3s infinite"}}>root@dnr-terminal:~$ <span style={{animation:"blink .8s infinite"}}>_</span></span>
-            <span style={{fontSize:7,color:"#1a3a1a",letterSpacing:2}}>{demoMode?"//DEMO_ENV":"//LIVE_ENV"} | DnR © 2026</span>
+          {/* Footer bar */}
+          <div style={{borderTop:"1px solid #00ff8808",padding:"4px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",flexShrink:0,background:"#020408"}}>
+            <span style={{fontSize:7,color:"#111",letterSpacing:3}}>DnR TERMINAL © 2026</span>
+            <span style={{fontSize:7,color:"#111",letterSpacing:2}}>{demoMode?"DEMO MODE":"LIVE TRADING"}</span>
           </div>
         </div>
       </div>
